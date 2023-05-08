@@ -1,0 +1,105 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "./train.py",
+            // "program": "./divide.py",
+            // "program": "./bin2ply.py",
+            
+            // "program": "./datasets/datasets.py",
+            // "program": "./load_tool.py",
+            // "program": "./preprocess/imgs2poses.py",//稀疏重建生成位姿
+            // "program": "./preprocess/gen_cameras.py",
+            // "program": "./postprocess/command_line.py",//稠密重建
+            // "program": "./load_tool.py",//画位姿
+            // "program": "./preprocess/cluster_mask.py",//
+            // "program": "./model/tcnn_nerf.py",//
+            
+            // "program": "./test/test1.py",//
+            // "program": "./test/DDP_test.py",//
+            // "program": "./datasets/divide_utils.py",//
+            
+            
+            
+            "args": [
+                    //  test.py/datasets.py
+                // "--conf","./conf/conf_tcnn.json",
+                "--conf_path","./config/neus-colmap.yaml",
+                // "--conf_path","./config/nerf-colmap.yaml",
+                // "--conf","/home/will/test/L-NeRF/conf/conf.json",
+                "--gpu","0",
+                "--num_epochs","1",
+                // "--mode","train",
+                // "--mode","val_mesh",
+                // "--case","eco",
+                // "--case","/scan65",
+                // "--case","magicSqure",                
+                // "--case","lego",                
+                // "--export","./exp",
+                "--is_continue","True",
+
+                //      img2pose.py
+                // "--scenedir","/home/will/data/public_data/magicSqure",
+                // "--scenedir","/home/will/data/public_data/eco",
+                // "--scenedir","/home/will/data/public_data/scan65",
+                // "--match_type","sequential_matcher"
+                // "/home/will/data/magicSqure"
+                //      gen_camears.py
+                // "/home/will/data/public_data/eco"
+                // "/home/will/data/public_data/scan65"
+                // command_line.py
+                // "--scenedir","/home/will/data/public_data/scan65"
+            
+                // "--gpu","0",
+                // "--grid","4","4",
+                // "--dataset_path","/home/will/data/mega-nerf/rubble-pixsfm",
+                // "--scale_path","0",
+                // "--config_path","configs/mega-nerf/rubble.yaml",
+                // "--output_path","./mask/rubble",
+                // "--cluster_2d","True",
+                // "--ray_altitude_range","11","38",//绝对尺度
+                // "--segmentation_path","./mask/segmentation"
+                
+                
+
+
+            ],
+            
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "multi-gpu",
+            "type": "bashdb",
+            "program": "./test/mul.sh",
+            "request": "launch",
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}",
+        },
+        {
+            "name": "one-model-multi-gpus",
+            "type": "python",
+            "request": "launch",
+            "module": "torch.distributed.run",
+            "justMyCode": true,
+            "env":{
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "args": [  
+                "--nproc_per_node=2",
+                "./train.py"
+                
+                
+            ]
+
+
+        }
+    ]
+}

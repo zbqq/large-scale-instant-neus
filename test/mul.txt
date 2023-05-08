@@ -1,0 +1,4 @@
+python test/DDP_test.py --index=0
+python test/DDP_test.py --index=1
+python test/DDP_test.py --index=2
+python test/DDP_test.py --index=3

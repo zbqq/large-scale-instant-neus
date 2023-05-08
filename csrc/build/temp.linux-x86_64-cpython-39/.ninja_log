@@ -1,0 +1,10 @@
+# ninja log v5
+0	8926	1680833033604826231	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/binding.o	369addc86dde9fa8
+0	28515	1680833053192877303	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/packbits.o	c9928778a2013c88
+0	29667	1680833054348880304	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/intersection.o	3adb47d33af20950
+0	29915	1680833054596880948	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/raymarching.o	15b328025dba5cf3
+0	32488	1680833057168887619	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/volumerendering.o	88967cc7aff0a6ae
+0	34820	1680833059500893661	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/losses.o	322306503be5799f
+6	23859	1680833873740665127	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/packbits.o	c9928778a2013c88
+6	24467	1680833874352660535	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/intersection.o	3adb47d33af20950
+5	23867	1680834494989966251	/home/will/test/test_server/largescale instant neus/csrc/build/temp.linux-x86_64-cpython-39/packbits.o	c9928778a2013c88

@@ -1,0 +1,145 @@
+# name: neus-colmap-${basename:${dataset.root_dir}}
+tag: ''
+
+# seed: 42
+seed: 37
+log_dir: ./logs
+case_name: magicSqure
+mask_dir: ./mask
+save_dir: ./exp
+model_start_num: 5 # 开始从第几个模型训练
+validate_freq: 300
+is_continue: 0
+dataset:
+  name: colmap
+  root_dir: /data3/zzy/data_lab/DJI951
+  # root_dir: /home/will/data/public_data/magicSqure
+  use_pixel_centers: true
+  n_test_traj_steps: 120
+  ray_sampling_strategy: same_image
+  # batch_size: 128
+  # batch_size: 2048
+  batch_size: 4096
+  # batch_size: 8192
+  split_num: 2000
+  revise_axis: 'None'
+  transform: True
+  grid_dim: 4
+  model_start_num: ${model_start_num}
+  model_num: 16
+  mask_dir: ${mask_dir}
+  grid_X: 4
+  grid_Y: 4
+  radius: ${model.radius}
+  batch_num: 5000
+  
+model:
+  name: neus
+  radius: 5
+  radius_z: 1.3
+  grid_update_freq: 16
+  grid_resolution: 256 # 128
+  num_samples_per_ray: 1024 # 512
+  grid_prune: true
+  dynamic_ray_sampling: true
+  batch_image_sampling: true
+  randomized: true
+  ray_chunk: 4096
+  init_variance: 0.05
+  cos_anneal_end: 100
+  sdf_network:
+    name: volume-sdf
+    radius: ${model.radius}
+    radius_z: ${model.radius_z}
+    feature_dim: 13
+    sdf_activation: none
+    sdf_bias: 0.
+    grad_type: analytic
+    isosurface:
+      method: mc
+      resolution: 512
+      chunk: 2097152
+      threshold: 0.
+    xyz_encoding_config:
+      otype: Grid
+      type: Hash
+      n_levels: 16
+      n_features_per_level: 2
+      log2_hashmap_size: 20 # 大小只影响hash冲突
+      base_resolution: 16
+      
+      # per_level_scale: 1.381912879967776 #N_max = 2048
+      # per_level_scale: 1.447269237440378 #N_max = 4096
+      per_level_scale: 1.515716566510398 #N_max = 8192
+      # per_level_scale: 1.5874010519681996 #N_max = 16384
+      # per_level_scale: 1.6624757922855755 #N_max = 32768
+      # per_level_scale: 1.7411011265922482 #N_max = 65536
+
+      # include_xyz: true
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 2
+      # sphere_init: true
+      # weight_norm: true
+  color_net:
+    name: volume-radiance
+    dir_encoding_config:
+      otype: SphericalHarmonics
+      degree: 4    
+      # otype: Frequency
+      # degree: 12  
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 3
+    color_activation: sigmoid
+  
+system:
+  name: neus-system
+  loss:
+    lambda_rgb: 1.
+    lambda_opacity: 0.7
+    lambda_mask: 0.
+    lambda_eikonal: 0.05
+  optimizer:
+    # name: Adam
+    name: FusedAdam
+    args:
+      # lr: 3.8e-4
+      betas: [0.9, 0.99]
+      eps: 1.e-15
+    params:
+      sdf_network:
+          lr: 3.e-3
+      color_net:
+          lr: 3.e-3
+      variance:
+          lr: 2.e-3
+  scheduler:
+    name: ExponentialLR
+    interval: step
+    args:
+      step_size: 100
+      # gamma: 0.99
+      # gamma: 1.01
+      gamma: 0.96
+      # gamma: ${calc_exp_lr_decay_rate:0.1,${trainer.max_steps}}    
+
+checkpoint:
+  save_top_k: -1
+  every_n_train_steps: ${trainer.max_steps}
+
+trainer:
+  max_steps: 20000
+  log_every_n_steps: 100
+  num_sanity_val_steps: 0
+  # val_check_interval: 500
+  limit_train_batches: 1.0
+  limit_val_batches: 1
+  enable_progress_bar: true 
+  precision: 16
