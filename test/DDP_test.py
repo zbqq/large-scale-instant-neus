@@ -7,7 +7,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import os
 import argparse
 
-
 def example(rank, world_size):
     # create default process group
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
@@ -41,7 +40,12 @@ def cleanup():
     "Cleans up the distributed environment"
     dist.destroy_process_group()
     
+
+def train(rank,world_size):
+    setup(rank,world_size)
     
+
+
 def main():
     world_size = 2
     mp.spawn(example,

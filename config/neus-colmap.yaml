@@ -17,7 +17,7 @@ is_continue: true
 use_DDP: false
 dataset:
   use_random: true
-  name: colmap
+  name: colmap 
   root_dir: ${root_dir}
   ray_sampling_strategy: same_image
   # batch_size: 128

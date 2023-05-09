@@ -60,6 +60,7 @@ if __name__ == '__main__':
         callbacks=callbacks,
         logger = logger,
         strategy = strategy,
+        strategy = 'ddp',
         **config.trainer
     )
     trainer.fit(system)
