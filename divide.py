@@ -1,7 +1,5 @@
    
 import torch
-import os
-import sys
 from utils.config_util import load_config
 import numpy as np
 import argparse
@@ -10,7 +8,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf_path',default='./config/neus-colmap.yaml')
     parser.add_argument('--gpu',type=str,default='0')
-    parser.add_argument('--num_epochs',type=int,default=1)
     args, extras = parser.parse_known_args()
     
     config = load_config(args.conf_path)

@@ -18,8 +18,7 @@ from torch.cuda.amp import custom_fwd, custom_bwd
 from .custom_functions import TruncExp
 import torch
 from torch import nn
-from .nerf import vanillaNeRF
-from .neus import NeuS
+
 from .tcnn_nerf import SDF,RenderingNet,VarianceNetwork
 from .loss import NeRFLoss
 import tinycudann as tcnn
@@ -30,9 +29,6 @@ import numpy as np
 import tqdm
 from load_tool import draw_poses
 NEAR_DISTANCE = 0.01
-model = {
-    "neus":vanillaNeRF
-}
 
 class baseModule(nn.Module):
     def __init__(self,config):#config.model

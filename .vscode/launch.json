@@ -8,7 +8,7 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            // "program": "./train.py",
+            "program": "./train.py",
             // "program": "./divide.py",
             // "program": "./bin2ply.py",
             
@@ -22,7 +22,7 @@
             // "program": "./model/tcnn_nerf.py",//
             
             // "program": "./test/test1.py",//
-            "program": "./test/DDP_test.py",//
+            // "program": "./test/DDP_test.py",//
             // "program": "./datasets/divide_utils.py",//
             
             
