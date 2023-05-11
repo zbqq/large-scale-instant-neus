@@ -106,7 +106,7 @@ RDF_BRU = np.array([[0,1,0],[0,0,-1],[-1,0,0]],dtype=np.float32)#BRU = RDF * P
 
 class BaseDataset(IterableDataset):
 # class BaseDataset(Dataset,divideTool):
-    def __init__(self,config,split='train',downsample=1.0):
+    def __init__(self,config,split='train',downsample=1.0,device=None):
         self.config = config
         self.split = split
         self.root_dir = config.root_dir
@@ -114,7 +114,7 @@ class BaseDataset(IterableDataset):
         self.ray_sampling_strategy = config.ray_sampling_strategy
         self.batch_size = config.batch_size
         self.model_num = self.config.grid_X * self.config.grid_Y
-        
+        self.device = device
         # self.transform_matrix = RDF_BRU
         self.current_model_num = self.config.model_start_num #记住更新！
         # if split == 'train' or split == 'test':#已经分割完毕
@@ -177,7 +177,7 @@ class BaseDataset(IterableDataset):
             
             while True: # batch_num由__len__确定
                 item = torch.load(self.mask_name[self.idx_list[self.idx_tmp]])
-                idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32).cuda()
+                idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32).to(self.device)
                 bits_array = item['bits_array']
                 studio.un_packbits_u32(idx_array,bits_array)
                 idx_array = idx_array.to(torch.bool)

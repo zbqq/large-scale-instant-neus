@@ -31,8 +31,9 @@ from load_tool import draw_poses
 NEAR_DISTANCE = 0.01
 
 class baseModule(nn.Module):
-    def __init__(self,config):#config.model
+    def __init__(self,config,device=None):#config.model
         super().__init__()
+        self.device = device
         self.config = config
         # L = 16; F = 2; log2_T = 19; N_min = 16
         # b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
