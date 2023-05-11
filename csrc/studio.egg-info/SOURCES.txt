@@ -2,6 +2,7 @@ binding.cpp
 distance_mask.cu
 intersection.cu
 losses.cu
+mega_nerf_mask.cu
 packbits.cu
 raymarching.cu
 setup.py

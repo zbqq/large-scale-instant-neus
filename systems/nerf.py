@@ -7,7 +7,7 @@ import os
 import cv2
 from torch.utils.data import DataLoader
 from utils.ray_utils import get_rays
-from apex.optimizers import FusedAdam
+# from apex.optimizers import FusedAdam
 from systems.base import BaseSystem
 from model.loss import NeRFLoss
 from datasets.colmap import ColmapDataset

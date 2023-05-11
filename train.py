@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # if config.is_continue==True:
     #     step = load_ckpt_path(config.save_dir)
 
-    system = system[config.system.name](config)
+    system = system[config.system.name](config) 
     trainer = Trainer(
         max_epochs=args.num_epochs,
         check_val_every_n_epoch=args.num_epochs,
