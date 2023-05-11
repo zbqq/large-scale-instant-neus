@@ -162,7 +162,7 @@ class NeuS(baseModule):
             'num_samples': torch.as_tensor([len(t_starts)], dtype=torch.int32, device=rays_o.device),
             'gradients': torch.concat(sdf_grad_samples,dim=0),
             'inv_s':self.variance.inv_s
-        }
+        } 
         
         return result
 
