@@ -11,8 +11,8 @@ from load_tool import draw_poses
 from .divide_utils import divideTool
 # RDF2BRU = np.array([[1,0,0],[0,0,-1],[0,1,0]]) @ np.array([[0,0,1],[0,-1,0],[1,0,0]])
 class ColmapDataset(BaseDataset,divideTool):
-    def __init__(self, config,device,split='train', downsample=1.0, *kwargs):
-        super().__init__(config, split, downsample,device=device)
+    def __init__(self, config,split='train', downsample=1.0, *kwargs):
+        super().__init__(config, split, downsample)
         super(BaseDataset,self).__init__(config,split)
         self.read_intrinsics()
         self.read_meta()
@@ -37,8 +37,11 @@ class ColmapDataset(BaseDataset,divideTool):
         self.K = torch.FloatTensor([[fx, 0, cx],
                                     [0, fy, cy],
                                     [0,  0,  1]])
-        self.K_inv = torch.linalg.inv(self.K).to(self.device)
-        self.directions = get_ray_directions(h, w, self.K).to(self.device)#相机坐标系下的dirs，也即归一化坐标|1
+        # self.K_inv = torch.linalg.inv(self.K).to(self.device)
+        # self.directions = get_ray_directions(h, w, self.K).to(self.device)#相机坐标系下的dirs，也即归一化坐标|1
+        self.K_inv = torch.linalg.inv(self.K)
+        self.directions = get_ray_directions(h, w, self.K)#相机坐标系下的dirs，也即归一化坐标|1
+    
     def read_meta(self):
         imdata = read_images_binary(os.path.join(self.root_dir, 'sparse/0/images.bin'))
         img_names = [imdata[k].name for k in imdata]

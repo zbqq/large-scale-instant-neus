@@ -173,23 +173,35 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
         # if not self.config.is_continue:
         # dataset = ColmapDataset(self.config.dataset)
-        self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=1.0,device=self.device_)
+        self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=1.0)
         self.train_dataset.batch_size = self.config.dataset.batch_size
         # self.train_dataset.ray_sampling_strategy = self.config.dataset.ray_sampling_strategy
-        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2,device=self.device_)
+        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2)
         
-        self.register_buffer('directions', self.train_dataset.directions.to(self.device_))
-        self.register_buffer('poses', self.train_dataset.poses.to(self.device_))
-        self.register_buffer('test_directions', self.test_dataset.directions.to(self.device_))
-        setattr(self,\
-            "model{}".format(self.current_model_num),
-            MODELS[self.config.model.name](self.config.model,device=self.device_)) # 需要浅拷贝
-        self.model = \
-            getattr(
-                self,"model{}".format(self.current_model_num),
-                MODELS[self.config.model.name](self.config.model,device=self.device_))
+        # self.register_buffer('directions', self.train_dataset.directions.to(self.device_))
+        # self.register_buffer('poses', self.train_dataset.poses.to(self.device_))
+        # self.register_buffer('test_directions', self.test_dataset.directions.to(self.device_))
+        
+        # setattr(self,\
+        #     "model{}".format(self.current_model_num),
+        #     MODELS[self.config.model.name](self.config.model)) # 需要浅拷贝
+        # self.model = \
+        #     getattr(
+        #         self,"model{}".format(self.current_model_num),
+        #         MODELS[self.config.model.name](self.config.model))
+        self.model = MODELS[self.config.model.name](self.config.model)
+        # setattr(self,\
+        #     "model{}".format(self.current_model_num),
+        #     MODELS[self.config.model.name](self.config.model)) # 需要浅拷贝
+        # self.model = \
+        #     getattr(
+        #         self,"model{}".format(self.current_model_num),
+        #         MODELS[self.config.model.name](self.config.model))
+        
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
                          self.train_dataset.scale[self.current_model_num,:])
+        
+        
         self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         self.loss = NeRFLoss(config=self.config.system.loss,lambda_distortion=0)
         if self.config.is_continue:
