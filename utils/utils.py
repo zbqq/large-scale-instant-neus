@@ -354,6 +354,9 @@ def load_ckpt_path(ckpt_dir):
     ckpt_path = sorted(os.listdir(ckpt_dir))[-1]
     step = int(ckpt_path[-9:-3])
     return step,os.path.join(ckpt_dir,ckpt_path)
+
+# def set_device():
     
+
     
     

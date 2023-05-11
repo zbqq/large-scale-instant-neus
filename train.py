@@ -3,7 +3,7 @@ import os
 from omegaconf import OmegaConf
 # from datasets
 import numpy as np
-
+import torch.multiprocessing as mp
 import argparse
 import logging
 from systems.nerf import NeRFSystem
@@ -35,9 +35,10 @@ if __name__ == '__main__':
     system['neus-system'] = NeuSSystem
     
     args, extras = parser.parse_known_args()
-    
-    torch.cuda.set_device(int(args.gpu))
-    n_gpus = len(args.gpu.split(','))
+    mp.set_start_method('spawn')
+    # torch.cuda.set_device(int(args.gpu))
+    # n_gpus = len(args.gpu.split(','))
+    n_gpus = [int(gpu) for gpu in args.gpu.split(',')]
     config = load_config(args.conf_path,cli_args=extras)
     
     callbacks=[
@@ -47,21 +48,23 @@ if __name__ == '__main__':
     logger = TensorBoardLogger(save_dir=config.log_dir,
                                name=config.case_name,
                                default_hp_metric=False)
-    strategy = 'ddp_find_unused_parameters_false'
+    # strategy = 'ddp_find_unused_parameters_false'
+    strategy = 'ddp'
     # if config.is_continue==True:
     #     step = load_ckpt_path(config.save_dir)
-
+    # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     system = system[config.system.name](config) 
     trainer = Trainer(
-        max_epochs=args.num_epochs,
-        check_val_every_n_epoch=args.num_epochs,
-        devices = n_gpus,
+        max_epochs = args.num_epochs,
+        check_val_every_n_epoch = args.num_epochs,
+        devices = args.gpu,
         accelerator = 'gpu',
-        callbacks=callbacks,
+        callbacks = callbacks,
         logger = logger,
         strategy = strategy,
         **config.trainer
     )
+    print("rank:",trainer.local_rank)
     trainer.fit(system)
     
     

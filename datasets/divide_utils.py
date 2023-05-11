@@ -98,13 +98,13 @@ class divideTool():
             grid = self.grids[i]
             for j in tqdm(range(0,self.poses.shape[0])):
                 rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[j].to('cuda'))
-                rays_o = rays_o.cuda()
-                rays_d = rays_d.cuda()
-                aabb = grid._roi_aabb.cuda()
+                rays_o = rays_o.to(self.device)
+                rays_d = rays_d.to(self.device)
+                aabb = grid._roi_aabb.to(self.device)
                 t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
                 # intersect_pix_idx = torch.where(t_min<100)[0]#存放
-                intersect_pix_idx = (t_min < 100).to(torch.int32).cuda() # [w*h, ],dtype = bool
-                bits_array = torch.zeros([bits_array_len],dtype=torch.int64).cuda()
+                intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
+                bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
                 studio.packbits_u32(intersect_pix_idx,bits_array)
                 # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
                 if (t_min<100).sum() > 10000:

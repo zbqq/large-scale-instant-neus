@@ -21,9 +21,9 @@ dataset:
   root_dir: ${root_dir}
   ray_sampling_strategy: same_image
   # batch_size: 128
-  batch_size: 2048
+  # batch_size: 2048
   # batch_size: 3248
-  # batch_size: 4096
+  batch_size: 4096
   # batch_size: 8192
   split_num: 2000
   model_start_num: ${model_start_num}

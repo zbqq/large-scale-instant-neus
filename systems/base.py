@@ -158,7 +158,6 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.scale=0.5
         self.cascades = max(1+int(np.ceil(np.log2(2*self.scale))), 1)
         
-        
         self.grid_size = 128
         L = 16; F = 2; log2_T = 19; N_min = 16
         b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
@@ -169,22 +168,26 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         # self.grid_coords = self.grid_coords.to("cuda")
         # self.density_grid = self.density_grid.to("cuda")
     def setup(self,stage):
+        # if num_gpu > 1:
+        self.device_ = torch.device("cuda",self.local_rank)
+        
         # if not self.config.is_continue:
         # dataset = ColmapDataset(self.config.dataset)
-        self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=1.0)
+        self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=1.0,device=self.device_)
         self.train_dataset.batch_size = self.config.dataset.batch_size
         # self.train_dataset.ray_sampling_strategy = self.config.dataset.ray_sampling_strategy
-        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2)
-        self.register_buffer('directions', self.train_dataset.directions.to(self.device))
-        self.register_buffer('poses', self.train_dataset.poses.to(self.device))
-        self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
+        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2,device=self.device_)
+        
+        self.register_buffer('directions', self.train_dataset.directions.to(self.device_))
+        self.register_buffer('poses', self.train_dataset.poses.to(self.device_))
+        self.register_buffer('test_directions', self.test_dataset.directions.to(self.device_))
         setattr(self,\
             "model{}".format(self.current_model_num),
-            MODELS[self.config.model.name](self.config.model)) # 需要浅拷贝
+            MODELS[self.config.model.name](self.config.model,device=self.device_)) # 需要浅拷贝
         self.model = \
             getattr(
                 self,"model{}".format(self.current_model_num),
-                MODELS[self.config.model.name](self.config.model))
+                MODELS[self.config.model.name](self.config.model,device=self.device_))
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
                          self.train_dataset.scale[self.current_model_num,:])
         self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
@@ -283,26 +286,26 @@ class BaseSystem(pl.LightningModule,ImageProcess):
     def train_dataloader(self):
         if self.config.use_DDP:
             return DataLoader(self.train_dataset,
-                              num_workers=0,
+                              num_workers=1,
                               persistent_workers=False,
-                              batch_size=5,
+                              batch_size=None,
                               pin_memory=False)
         else:
             return DataLoader(self.train_dataset,
-                              num_workers=0,
+                              num_workers=1,
                               persistent_workers=False,
                               batch_size=None,
                               pin_memory=False)
     def val_dataloader(self):
         if self.config.use_DDP:
             return DataLoader(self.test_dataset,
-                              num_workers=0,
+                              num_workers=1,
                               persistent_workers=False,
                               batch_size=None,
                               pin_memory=False)
         else:
             return DataLoader(self.test_dataset,
-                              num_workers=0,
+                              num_workers=1,
                               persistent_workers=False,
                               batch_size=None,
                               pin_memory=False)

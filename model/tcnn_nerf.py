@@ -74,8 +74,9 @@ class VarianceNetwork(nn.Module):
         return torch.ones([len(x), 1], device=self.variance.device) * self.inv_s
 class baseImplicitRep(nn.Module):#都采用grid或plane的方式
     
-    def __init__(self, config):
+    def __init__(self, config,device=None):
         super().__init__()
+        self.device=device
         #这里出来的是sdf值
         # scale = 1.5
         self.config = OmegaConf.to_container(config)
@@ -84,17 +85,19 @@ class baseImplicitRep(nn.Module):#都采用grid或plane的方式
             if isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.05)
                 m.bias.data.zero_()
-        self.register_buffer('center', center.cuda())
-        self.register_buffer('scale', scale.cuda())
-        self.register_buffer('xyz_min', -torch.ones(3).cuda()*self.scale + self.center)
-        self.register_buffer('xyz_max', torch.ones(3).cuda()*self.scale + self.center)
+        self.register_buffer('center', center.to(self.device))
+        self.register_buffer('scale', scale.to(self.device))
+        self.register_buffer('xyz_min', -torch.ones(3).to(self.device)*self.scale + self.center)
+        self.register_buffer('xyz_max', torch.ones(3).to(self.device)*self.scale + self.center)
         self.register_buffer('half_size', (self.xyz_max-self.xyz_min)/2)
         
-class SDF(baseImplicitRep):
-    def __init__(self, config):
-        super().__init__(config=config)
-        self.config = OmegaConf.to_container(config)
         
+        
+class SDF(baseImplicitRep):
+    def __init__(self, config,device=None):
+        super().__init__(config=config,device=device)
+        self.config = OmegaConf.to_container(config)
+        self.device = device
         self.xyz_encoder = \
             tcnn.Encoding(
                 n_input_dims=3,
