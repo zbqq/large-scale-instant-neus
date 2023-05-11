@@ -32,47 +32,7 @@ class NeuSSystem(BaseSystem):
         self.current_model_num = self.config.model_start_num # 训练到的第几个模型
         self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
         
-            
-    # def setup(self,stage):
-    #     # if not self.config.is_continue:
-    #     # dataset = ColmapDataset(self.config.dataset)
-    #     self.train_dataset = ColmapDataset(self.config.dataset,split='train',downsample=1.0)
-    #     self.train_dataset.batch_size = self.config.dataset.batch_size
-    #     # self.train_dataset.ray_sampling_strategy = self.config.dataset.ray_sampling_strategy
-    #     self.test_dataset = ColmapDataset(self.config.dataset,split='test',downsample=0.2)
-    #     self.register_buffer('directions', self.train_dataset.directions.to(self.device))
-    #     self.register_buffer('poses', self.train_dataset.poses.to(self.device))
-    #     self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
-    #     setattr(self,"model{}".format(self.current_model_num),NeuS(self.config.model)) # 需要浅拷贝
-    #     self.model = getattr(self,"model{}".format(self.current_model_num),NeuS(self.config.model)) # 需要浅拷贝
-    #     self.model.setup(self.train_dataset.centers[self.current_model_num,:],
-    #                      self.train_dataset.scale[self.current_model_num,:])
-    #     self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
-    #     self.loss = NeRFLoss(config=self.config.system.loss,lambda_distortion=0)
-    #     if self.config.is_continue:
-    #         _,ckpt_path = load_ckpt_path(os.path.join(self.config.ckpt_dir,
-    #                                     '{}'.format(self.current_model_num),
-    #                                     self.config.model.name)
-    #                                    ) 
-    #         self.load_checkpoint(ckpt_path)
-    def train_dataloader(self):
-        if self.config.use_DDP:
-            return DataLoader(self.train_dataset,
-                              num_workers=0,
-                              persistent_workers=False,
-                              batch_size=None,
-                              pin_memory=False)
-        else:
-            return DataLoader(self.train_dataset,
-                              num_workers=0,
-                              persistent_workers=False,
-                              batch_size=None,
-                              pin_memory=False)
-    def val_dataloader(self):
-        return DataLoader(self.test_dataset,
-                          num_workers=0,
-                          batch_size=None,
-                          pin_memory=False)
+
     
     def on_train_start(self):
         # self.model.mark_invisible_cells(self.train_dataset.K.to(self.device),

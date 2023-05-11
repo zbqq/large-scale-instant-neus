@@ -16,6 +16,7 @@ from model.neus import NeuS
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 
+from torch.utils.data import DataLoader
 
 
 DATASETS={
@@ -279,3 +280,30 @@ class BaseSystem(pl.LightningModule,ImageProcess):
             # 'psnr': psnr,
             'index': batch['pose_idx']
         }
+    def train_dataloader(self):
+        if self.config.use_DDP:
+            return DataLoader(self.train_dataset,
+                              num_workers=0,
+                              persistent_workers=False,
+                              batch_size=5,
+                              pin_memory=False)
+        else:
+            return DataLoader(self.train_dataset,
+                              num_workers=0,
+                              persistent_workers=False,
+                              batch_size=None,
+                              pin_memory=False)
+    def val_dataloader(self):
+        if self.config.use_DDP:
+            return DataLoader(self.test_dataset,
+                              num_workers=0,
+                              persistent_workers=False,
+                              batch_size=None,
+                              pin_memory=False)
+        else:
+            return DataLoader(self.test_dataset,
+                              num_workers=0,
+                              persistent_workers=False,
+                              batch_size=None,
+                              pin_memory=False)
+    
