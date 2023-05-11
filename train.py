@@ -35,16 +35,17 @@ if __name__ == '__main__':
     system['neus-system'] = NeuSSystem
     
     args, extras = parser.parse_known_args()
+    config = load_config(args.conf_path,cli_args=extras)
     mp.set_start_method('spawn')
     # torch.cuda.set_device(int(args.gpu))
     # n_gpus = len(args.gpu.split(','))
-    n_gpus = [int(gpu) for gpu in args.gpu.split(',')]
-    config = load_config(args.conf_path,cli_args=extras)
+    # n_gpus = [int(gpu) for gpu in args.gpu.split(',')]
+    
+    
     
     callbacks=[
         # pl.callbacks.LambdaCallback(on_train_start=update_global_step)
         ]
-
     logger = TensorBoardLogger(save_dir=config.log_dir,
                                name=config.case_name,
                                default_hp_metric=False)

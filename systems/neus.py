@@ -101,9 +101,9 @@ class NeuSSystem(BaseSystem):
         loss = sum(lo.mean() for lo in loss_d.values())
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         
-        self.log('sdf_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True)
-        self.log('tex_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True)
-        self.log('var_lr', torch.tensor(self.net_opt.param_groups[2]['lr']), prog_bar=True)
+        self.log('sdf_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
+        self.log('tex_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True,sync_dist=True)
+        self.log('var_lr', torch.tensor(self.net_opt.param_groups[2]['lr']), prog_bar=True,sync_dist=True)
         if 'inv_s' in render_out.keys():
             self.log('train/inv_s', render_out['inv_s'], prog_bar=True)
         return {
