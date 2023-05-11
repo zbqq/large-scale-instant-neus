@@ -47,7 +47,7 @@ class NeRFLoss(nn.Module):
     def forward(self, results, target, **kwargs):
         d = {}
         # d['rgb'] = F.mse_loss(results['rgb'],target['rays'].to(self.device),reduction='mean') * self.config.lambda_rgb
-        d['rgb'] = (results['rgb']-target['rays'].to(self.device))**2 * self.config.lambda_rgb
+        d['rgb'] = (results['rgb']-target['rays'])**2 * self.config.lambda_rgb
         # d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays'].to(self.device))#训练的epoch小的话很不好
         o = results['opacity']+1e-10
         # encourage opacity to be either 0 or 1 to avoid floater

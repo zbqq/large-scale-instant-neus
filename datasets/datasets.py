@@ -76,9 +76,10 @@ def get_Rz(theta):
     R[1,0] = sin(theta)
     return R
 def get_trueIdx(idx_array,batch_size):
-    true_idx = idx_array.nonzero().view(-1)
-    batch_num = min(true_idx.shape[0],batch_size)
-    return true_idx[torch.randperm(true_idx.shape[0])[0:batch_num]]
+    idx_array = idx_array.nonzero().view(-1)
+    print(idx_array.shape[0])
+    batch_num = min(idx_array.shape[0],batch_size)
+    return idx_array[torch.randperm(idx_array.shape[0])[0:batch_num]]
 
 def revise(poses,theta,pts3d=None,axis='y'):
         if axis == 'x':
@@ -176,10 +177,10 @@ class BaseDataset(IterableDataset):
             
             while True: # batch_num由__len__确定
                 item = torch.load(self.mask_name[self.idx_list[self.idx_tmp]])
-                idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32)
+                idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32).to(self.device)
                 bits_array = item['bits_array']
                 studio.un_packbits_u32(idx_array,bits_array)
-                idx_array = idx_array.to(torch.bool)
+                idx_array = idx_array.to(torch.bool).to("cpu")
                 true_idx = get_trueIdx(idx_array,self.batch_size)
                 if true_idx.shape[0] < 2000:
                     self.idx_tmp += 1

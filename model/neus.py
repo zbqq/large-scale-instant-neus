@@ -31,16 +31,15 @@ from load_tool import draw_poses
 NEAR_DISTANCE = 0.01
 
 class NeuS(baseModule):
-    def __init__(self,config,device=None):#config.model
-        super().__init__(config,device=device)
-        self.device = device
+    def __init__(self,config):#config.model
+        super().__init__(config)
         self.config = config
         self.render_step_size = 1.732 * 2 * self.config.aabb.radius_z / self.config.num_samples_per_ray
         
         self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
         
         self.variance = VarianceNetwork(self.config.init_variance)
-        self.geometry_network = SDF(self.config.sdf_network,self.device)
+        self.geometry_network = SDF(self.config.sdf_network)
         self.color_net = RenderingNet(self.config.color_net)
         self.cos_anneal_ratio = 1.0
         # self.loss = NeRFLoss(lambda_distortion=0)

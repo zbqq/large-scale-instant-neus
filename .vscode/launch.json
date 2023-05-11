@@ -33,7 +33,7 @@
                 "--conf_path","./config/neus-colmap.yaml",
                 // "--conf_path","./config/nerf-colmap.yaml",
                 // "--conf","/home/will/test/L-NeRF/conf/conf.json",
-                "--gpu","5,6",
+                "--gpu","1",
                 "--num_epochs","1",
                 // "--mode","train",
                 // "--mode","val_mesh",

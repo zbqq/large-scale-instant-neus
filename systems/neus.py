@@ -42,9 +42,10 @@ class NeuSSystem(BaseSystem):
 
     def configure_optimizers(self):
         
+        self.train_dataset.device = self.device
         self.register_buffer('directions', self.train_dataset.directions.to(self.device))
-        self.register_buffer('poses', self.train_dataset.poses).to(self.device)
-        self.register_buffer('test_directions', self.test_dataset.directions).to(self.device)
+        self.register_buffer('poses', self.train_dataset.poses.to(self.device))
+        self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
         # opts=[]
         # for n, p in self.model.named_parameters():
         #     if n not in ['dR', 'dT']: net_params += [p]

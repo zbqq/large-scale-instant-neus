@@ -39,7 +39,7 @@ if __name__ == '__main__':
     mp.set_start_method('spawn')
     # torch.cuda.set_device(int(args.gpu))
     # n_gpus = len(args.gpu.split(','))
-    # n_gpus = [int(gpu) for gpu in args.gpu.split(',')]
+    gpus = [int(gpu) for gpu in args.gpu.split(',')]
     
     
     
@@ -58,11 +58,12 @@ if __name__ == '__main__':
     trainer = Trainer(
         max_epochs = args.num_epochs,
         check_val_every_n_epoch = args.num_epochs,
-        devices = args.gpu,
+        devices = gpus,
         accelerator = 'gpu',
         callbacks = callbacks,
         logger = logger,
         strategy = strategy,
+        auto_scale_batch_size=True,
         **config.trainer
     )
     print("rank:",trainer.local_rank)

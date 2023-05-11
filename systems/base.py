@@ -175,6 +175,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         # dataset = ColmapDataset(self.config.dataset)
         self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=1.0)
         self.train_dataset.batch_size = self.config.dataset.batch_size
+        
         # self.train_dataset.ray_sampling_strategy = self.config.dataset.ray_sampling_strategy
         self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2)
         
