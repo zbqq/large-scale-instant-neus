@@ -33,7 +33,7 @@
                 "--conf_path","./config/neus-colmap.yaml",
                 // "--conf_path","./config/nerf-colmap.yaml",
                 // "--conf","/home/will/test/L-NeRF/conf/conf.json",
-                "--gpu","0",
+                "--gpu","3",
                 "--num_epochs","1",
                 // "--mode","train",
                 // "--mode","val_mesh",
@@ -42,7 +42,7 @@
                 // "--case","magicSqure",                
                 // "--case","lego",                
                 // "--export","./exp",
-                "--is_continue","True",
+                // "--is_continue","True",
 
                 //      img2pose.py
                 // "--scenedir","/home/will/data/public_data/magicSqure",

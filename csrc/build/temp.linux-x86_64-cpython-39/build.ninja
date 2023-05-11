@@ -2,10 +2,11 @@ ninja_required_version = 1.3
 cxx = c++
 nvcc = /usr/local/cuda/bin/nvcc
 
-cflags = -pthread -B /home/will/anaconda3/envs/torch-ngp/compiler_compat -Wno-unused-result -Wsign-compare -DNDEBUG -fwrapv -O2 -Wall -fPIC -O2 -isystem /home/will/anaconda3/envs/torch-ngp/include -fPIC -O2 -isystem /home/will/anaconda3/envs/torch-ngp/include -fPIC '-I/home/will/test/test_server/largescale instant neus/csrc/include' -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include/torch/csrc/api/include -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include/TH -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include/THC -I/usr/local/cuda/include -I/home/will/anaconda3/envs/torch-ngp/include/python3.9 -c
+cflags = -pthread -B /home/zzy/anaconda3/envs/large-nerf/compiler_compat -Wno-unused-result -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/zzy/anaconda3/envs/large-nerf/include -I/home/zzy/anaconda3/envs/large-nerf/include -fPIC -O2 -isystem /home/zzy/anaconda3/envs/large-nerf/include -fPIC -I/home/zzy/engineer/git/large-scale-instant-neus/csrc/include -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include/torch/csrc/api/include -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include/TH -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include/THC -I/usr/local/cuda/include -I/home/zzy/anaconda3/envs/large-nerf/include/python3.9 -c
 post_cflags = -O2 -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=studio -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++14
-cuda_cflags = '-I/home/will/test/test_server/largescale instant neus/csrc/include' -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include/torch/csrc/api/include -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include/TH -I/home/will/anaconda3/envs/torch-ngp/lib/python3.9/site-packages/torch/include/THC -I/usr/local/cuda/include -I/home/will/anaconda3/envs/torch-ngp/include/python3.9 -c
+cuda_cflags = -I/home/zzy/engineer/git/large-scale-instant-neus/csrc/include -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include/torch/csrc/api/include -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include/TH -I/home/zzy/anaconda3/envs/large-nerf/lib/python3.9/site-packages/torch/include/THC -I/usr/local/cuda/include -I/home/zzy/anaconda3/envs/large-nerf/include/python3.9 -c
 cuda_post_cflags = -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O2 -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=studio -D_GLIBCXX_USE_CXX11_ABI=0 -gencode=arch=compute_86,code=compute_86 -gencode=arch=compute_86,code=sm_86 -std=c++14
+cuda_dlink_post_cflags = 
 ldflags = 
 
 rule compile
@@ -20,12 +21,18 @@ rule cuda_compile
 
 
 
-build /home/will/test/test_server/largescale$ instant$ neus/csrc/build/temp.linux-x86_64-cpython-39/binding.o: compile /home/will/test/test_server/largescale$ instant$ neus/csrc/binding.cpp
-build /home/will/test/test_server/largescale$ instant$ neus/csrc/build/temp.linux-x86_64-cpython-39/intersection.o: cuda_compile /home/will/test/test_server/largescale$ instant$ neus/csrc/intersection.cu
-build /home/will/test/test_server/largescale$ instant$ neus/csrc/build/temp.linux-x86_64-cpython-39/losses.o: cuda_compile /home/will/test/test_server/largescale$ instant$ neus/csrc/losses.cu
-build /home/will/test/test_server/largescale$ instant$ neus/csrc/build/temp.linux-x86_64-cpython-39/packbits.o: cuda_compile /home/will/test/test_server/largescale$ instant$ neus/csrc/packbits.cu
-build /home/will/test/test_server/largescale$ instant$ neus/csrc/build/temp.linux-x86_64-cpython-39/raymarching.o: cuda_compile /home/will/test/test_server/largescale$ instant$ neus/csrc/raymarching.cu
-build /home/will/test/test_server/largescale$ instant$ neus/csrc/build/temp.linux-x86_64-cpython-39/volumerendering.o: cuda_compile /home/will/test/test_server/largescale$ instant$ neus/csrc/volumerendering.cu
+
+
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/binding.o: compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/binding.cpp
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/distance_mask.o: cuda_compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/distance_mask.cu
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/intersection.o: cuda_compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/intersection.cu
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/losses.o: cuda_compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/losses.cu
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/mega_nerf_mask.o: cuda_compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/mega_nerf_mask.cu
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/packbits.o: cuda_compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/packbits.cu
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/raymarching.o: cuda_compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/raymarching.cu
+build /home/zzy/engineer/git/large-scale-instant-neus/csrc/build/temp.linux-x86_64-cpython-39/volumerendering.o: cuda_compile /home/zzy/engineer/git/large-scale-instant-neus/csrc/volumerendering.cu
+
+
 
 
 
