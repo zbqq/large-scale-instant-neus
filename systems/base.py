@@ -25,7 +25,7 @@ DATASETS={
 MODELS={
     'nerf':vanillaNeRF,
     'neus':NeuS
-}
+} 
 class ImageProcess():#存储图像
     @property
     def save_dir(self):
@@ -154,7 +154,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        
+         
         self.scale=0.5
         self.cascades = max(1+int(np.ceil(np.log2(2*self.scale))), 1)
         
