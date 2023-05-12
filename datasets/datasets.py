@@ -77,7 +77,7 @@ def get_Rz(theta):
     return R
 def get_trueIdx(idx_array,batch_size):
     idx_array = idx_array.nonzero().view(-1)
-    print(idx_array.shape[0])
+    # print(idx_array.shape[0])
     batch_num = min(idx_array.shape[0],batch_size)
     return idx_array[torch.randperm(idx_array.shape[0])[0:batch_num]]
 

@@ -63,7 +63,6 @@ if __name__ == '__main__':
         callbacks = callbacks,
         logger = logger,
         strategy = strategy,
-        auto_scale_batch_size=True,
         **config.trainer
     )
     print("rank:",trainer.local_rank)

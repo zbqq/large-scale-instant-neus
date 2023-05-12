@@ -15,7 +15,6 @@ from model.neus import NeuS
 from load_tool import draw_poses
 from utils.utils import parse_optimizer
 from utils.utils import load_ckpt_path
-
 class NeuSSystem(BaseSystem):
     def __init__(self,config):
         super().__init__(config)#最初的config
