@@ -1,0 +1,9 @@
+# ninja log v5
+0	23776	1684061008050908473	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
+2	38433	1684061022707141534	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/packbits.o	9c1012ccc05d4739
+1	39618	1684061023891160361	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/distance_mask.o	96ce086c58691cb6
+3	42186	1684061026459201197	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/mega_nerf_mask.o	99014f2016957fe0
+2	42204	1684061026479201515	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/intersection.o	722cbfbf1d605a7f
+1	42935	1684061027211213155	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/raymarching.o	be90397eea5583f2
+2	44480	1684061028751237643	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/volumerendering.o	780a5efd2995f959
+1	49658	1684061033927319950	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/losses.o	c85618b61775afac

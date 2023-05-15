@@ -27,11 +27,15 @@ class divideTool():
     def __init__(self,config,split='divide'):
         self.config = config
         self.split = split   
-        self.Rc_path = os.path.join(self.config.root_dir,'R_correct.txt')
-        self.new_pts3d_path = os.path.join(self.config.root_dir,'new_pts3d.txt')
-        self.centers_and_scales_path = os.path.join(self.config.root_dir,'CaS.txt')
+        self.Rc_path = os.path.join(self.config.root_dir,'R_correct.txt')#需要输入的
+        self.new_pts3d_path = os.path.join(self.config.root_dir,'new_pts3d.txt')#需要输入的
+        self.centers_and_scales_path = os.path.join(self.config.root_dir,'CaS.txt')#输出的
         self.mask_save_path = os.path.join(self.config.mask_dir,"model")
         self.model_num = self.config.grid_X * self.config.grid_Y
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda:0")  
+        else:
+            raise RuntimeError("divide tool must use GPU!")
         if self.model_num > 1:
             for i in range(0,self.model_num):
                 #存放每一个model对poses的需求索引，以及poses对该model的intersect_pix_idx
@@ -67,7 +71,8 @@ class divideTool():
         for i in range(0,centroids.shape[0]):
             center = centroids[i,:].reshape(3,-1)
             self.centers.append(center)
-            scene_aabb = get_aabb(center=center,scale=torch.cat([radius[:2],torch.tensor([0.3])]).view(3,1))#divide时需要将scale_z变得很小
+            # scene_aabb = get_aabb(center=center,scale=torch.cat([radius[:2],torch.tensor([0.3])]).view(3,1))#divide时需要将scale_z变得很小
+            scene_aabb = get_aabb(center=center,scale=radius[:3].view(3,1))#divide时需要将scale_z变得很小
             self.aabbs.append(scene_aabb)
             center_and_scale.append(torch.concat([center.view(3),radius.view(3)]))
             
@@ -97,19 +102,28 @@ class divideTool():
         for i in range(self.config.model_start_num,len(self.grids)):
             grid = self.grids[i]
             for j in tqdm(range(0,self.poses.shape[0])):
-                rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[j].to('cuda'))
+                rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[j])
                 rays_o = rays_o.to(self.device)
                 rays_d = rays_d.to(self.device)
                 aabb = grid._roi_aabb.to(self.device)
-                t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
-                # intersect_pix_idx = torch.where(t_min<100)[0]#存放
-                intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
-                bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
-                studio.packbits_u32(intersect_pix_idx,bits_array)
-                # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
-                if (t_min<100).sum() > 10000:
-
+                if self.model_num > 1:
+                    t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
+                    # intersect_pix_idx = torch.where(t_min<100)[0]#存放
+                    intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
+                    bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
+                    studio.packbits_u32(intersect_pix_idx,bits_array)
                     # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
+                    if (t_min<100).sum() > 4000:
+                        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
+                        torch.save({
+                            "bits_array":bits_array,
+                            "pose_idx":j,
+                            "rays_nums":intersect_pix_idx.sum()
+                        },os.path.join(self.mask_save_path,"{}".format(i),'metadata_{}.pt'.format(j)))  
+                else:
+                    intersect_pix_idx = torch.ones([bits_array_len],dtype=torch.int32).to(self.device)
+                    bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
+                    studio.packbits_u32(intersect_pix_idx,bits_array)
                     torch.save({
                         "bits_array":bits_array,
                         "pose_idx":j,

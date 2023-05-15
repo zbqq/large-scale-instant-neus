@@ -155,16 +155,16 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         super().__init__()
         self.config = config
          
-        self.scale=0.5
-        self.cascades = max(1+int(np.ceil(np.log2(2*self.scale))), 1)
+        # self.scale=0.5
+        # self.cascades = max(1+int(np.ceil(np.log2(2*self.scale))), 1)
         
-        self.grid_size = 128
-        L = 16; F = 2; log2_T = 19; N_min = 16
-        b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
-        print(f'GridEncoding: Nmin={N_min} b={b:.5f} F={F} T=2^{log2_T} L={L}')
+        # self.grid_size = 128
+        # L = 16; F = 2; log2_T = 19; N_min = 16
+        # b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
+        # print(f'GridEncoding: Nmin={N_min} b={b:.5f} F={F} T=2^{log2_T} L={L}')
         
-        self.G = self.grid_size
-        self.max_hits = 1
+        # self.G = self.grid_size
+        # self.max_hits = 1
         # self.grid_coords = self.grid_coords.to("cuda")
         # self.density_grid = self.density_grid.to("cuda")
     def setup(self,stage):
@@ -305,7 +305,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
                               pin_memory=False)
         else:
             return DataLoader(self.train_dataset,
-                              num_workers=1,
+                              num_workers=0,
                               persistent_workers=False,
                               batch_size=None,
                               pin_memory=False)
@@ -318,8 +318,31 @@ class BaseSystem(pl.LightningModule,ImageProcess):
                               pin_memory=False)
         else:
             return DataLoader(self.test_dataset,
-                              num_workers=1,
+                              num_workers=0,
                               persistent_workers=False,
                               batch_size=None,
                               pin_memory=False)
+            
+    def training_step_end(self, step_output):
+        if (self.global_step+1) % self.config.validate_freq == 0:
+            with torch.no_grad():
+                for idx,item in enumerate(self.val_dataloader()):
+                    self.validation_step(item,0)
+                    break
     
+    def training_epoch_end(self,loss):#是否进入到此处是datasets len决定的
+        #保存现模型
+        lr = self.net_opt.param_groups[0]['lr']
+        print('learning_rate',lr)
+        self.current_model_num_tmp += 1
+        #更新优化器在optimizer.step中执行
+        if self.current_model_num != self.current_model_num_tmp:
+            
+            # 注册新模型
+            del self.model#浅拷贝，等价于删掉modeli
+            setattr(self,"model{}".format(self.current_model_num),MODELS[self.config.model.name](self.config.model))
+            self.model = getattr(self,"model{}".format(self.current_model_num),MODELS[self.config.model.name](self.config.model))
+            self.model.setup(self.train_dataset.centers[self.current_model_num,:],
+                             self.train_dataset.scale[self.current_model_num,:])
+
+            self.configure_optimizers()

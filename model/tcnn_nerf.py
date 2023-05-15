@@ -35,13 +35,17 @@ class RenderingNet(nn.Module):
             n_input_dims=3,
             encoding_config=self.dir_encoding_config
         )
+        if self.config["use_normal"]:
+            n_input_dims = self.dir_encoder.n_output_dims + 16 + 3
+        else:
+            n_input_dims = self.dir_encoder.n_output_dims + 16
+            
         self.decoder = tcnn.Network(
-            n_input_dims = self.dir_encoder.n_output_dims + 16 + 3,
+            n_input_dims = n_input_dims,
             n_output_dims=3,
             network_config=self.color_config
         )
-
-    def forward(self,d,fea,normal=None):
+    def forward(self,d,fea):
         """
             d:[N , 3]
             fea:[N, fea_name]
@@ -49,7 +53,7 @@ class RenderingNet(nn.Module):
         d = (d + 1.0) / 2.0
         d_embd = self.dir_encoder(d)
         # h = torch.cat([pts, d,gradients, geo_fea], dim=-1)
-        h = torch.cat([d_embd,fea,normal], dim=-1)
+        h = torch.cat([d_embd,fea], dim=-1)
         h = self.decoder(h)
         rgbs = h
         return rgbs

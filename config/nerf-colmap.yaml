@@ -3,8 +3,9 @@ tag: ''
 
 # seed: 42
 seed: 37
-case_name: DJI951
-root_dir: /data3/zzy/data_lab/${case_name}
+case_name: magicSqure
+# root_dir: /data3/zzy/data_lab/${case_name}
+root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
 grid_X: 1
 grid_Y: 1
@@ -23,14 +24,14 @@ dataset:
   # batch_size: 128
   # batch_size: 2048
   # batch_size: 3248
-  batch_size: 4096
-  # batch_size: 8192
-  split_num: 2000
+  # batch_size: 4096
+  batch_size: 8192
+  split_num: 1500
   model_start_num: ${model_start_num}
   mask_dir: ${mask_dir}
   grid_X: ${grid_X}
   grid_Y: ${grid_Y}
-  batch_num: 40000
+  batch_num: 400000
   
 model:
   name: nerf
@@ -40,8 +41,9 @@ model:
     radius_z: 1.22
   grid_update_freq: 16
   grid_resolution: 128 # 128
-  num_samples_per_ray: 256 # 512
+  num_samples_per_ray: 512 # 512
   grid_prune: true
+  use_nerfacc: true
   dynamic_ray_sampling: true
   batch_image_sampling: true
   randomized: true
@@ -86,6 +88,7 @@ model:
       # weight_norm: true
   color_net:
     name: volume-radiance
+    use_normal: false
     dir_encoding_config:
       # otype: SphericalHarmonics
       # degree: 4    
@@ -103,9 +106,8 @@ system:
   name: nerf-system
   loss:
     lambda_rgb: 1.
-    lambda_opacity: 0.6
+    lambda_opacity: 0.3
     lambda_mask: 0.
-    lambda_eikonal: 0.05
   optimizer:
     # name: Adam
     name: FusedAdam
@@ -114,9 +116,9 @@ system:
       eps: 1.e-15
     params:
       geometry_network:
-          lr: 3.e-4
+          lr: 6.e-3
       color_net:
-          lr: 3.e-4
+          lr: 3.e-3
   scheduler:
     name: ExponentialLR
     interval: step
@@ -124,7 +126,7 @@ system:
       step_size: 80
       # gamma: 0.99
       # gamma: 1.01
-      gamma: 0.997
+      gamma: 0.98
 
 checkpoint:
   save_top_k: -1

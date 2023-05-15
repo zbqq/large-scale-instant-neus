@@ -184,6 +184,7 @@ class BaseDataset(IterableDataset):
                 true_idx = get_trueIdx(idx_array,self.batch_size)
                 if true_idx.shape[0] < 2000:
                     self.idx_tmp += 1
+                    del item,idx_array,bits_array
                     continue
                 dirs=self.directions[true_idx]
                 pose_idx = item['pose_idx']

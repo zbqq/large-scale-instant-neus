@@ -62,7 +62,7 @@ if __name__ == '__main__':
         accelerator = 'gpu',
         callbacks = callbacks,
         logger = logger,
-        strategy = strategy,
+        # strategy = strategy,
         **config.trainer
     )
     print("rank:",trainer.local_rank)

@@ -3,8 +3,9 @@ tag: ''
 
 # seed: 42
 seed: 37
-case_name: DJI951
-root_dir: /data3/zzy/data_lab/${case_name}
+case_name: scan65
+# root_dir: /data3/zzy/data_lab/${case_name}
+root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
 grid_X: 1
 grid_Y: 1
@@ -128,7 +129,7 @@ system:
       step_size: 100
       # gamma: 0.99
       # gamma: 1.01
-      gamma: 0.997
+      gamma: 0.98
       # gamma: ${calc_exp_lr_decay_rate:0.1,${trainer.max_steps}}    
 
 checkpoint:
