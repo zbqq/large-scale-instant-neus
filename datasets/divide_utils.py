@@ -97,7 +97,7 @@ class divideTool():
             
         """
         self.gen_centers_from_pts(grid_dim)
-        
+
         bits_array_len = math.floor(self.img_wh[0]*self.img_wh[1]/32)
         for i in range(self.config.model_start_num,len(self.grids)):
             grid = self.grids[i]

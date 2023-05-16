@@ -59,7 +59,10 @@ class ColmapDataset(BaseDataset,divideTool):
         imdata = read_images_binary(os.path.join(self.root_dir, 'sparse/0/images.bin'))
         img_names = [imdata[k].name for k in imdata]
         perm = np.argsort(img_names)
-        folder = 'images'
+        if self.config.downsample < 1.0:
+            folder = "images_undistorted_{}".format(self.config.downsample)
+        else:
+            folder = 'images'
         self.img_paths = [os.path.join(self.root_dir, folder, name)
                          for name in sorted(img_names)]
         

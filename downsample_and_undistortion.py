@@ -7,6 +7,25 @@ import argparse
 from datasets.colmap import ColmapDataset
 from systems.base import ImageProcess
 import os
+import glob
+from tqdm import tqdm
+def params_from_models(camera_model:np.ndarray,downsample:float=1.0):
+    ## Radial-Tangential distortion model
+    fx = camera_model[1]*downsample
+    fy = camera_model[2]*downsample
+    cx = camera_model[3]*downsample
+    cy = camera_model[4]*downsample
+    K = torch.FloatTensor([[fx, 0, cx],
+                            [0, fy, cy],
+                            [0,  0,  1]])
+    distortion = np.array([
+        camera_model[5],
+        camera_model[6],
+        camera_model[7],
+        camera_model[8],
+        camera_model[9]
+    ])
+    return K,distortion
 
 
 
@@ -20,31 +39,24 @@ if __name__ == '__main__':
     config = load_config(args.conf_path)
     
     dataset = ColmapDataset(config.dataset,split='divide',downsample=config.dataset.downsample)
-    assert dataset.camera_model == "OPENCV"
-    
+    # assert dataset.camera_model == "OPENCV"
+    camera_models = np.loadtxt(os.path.join(config.root_dir,"cameras.txt"))
+    K,distortion=params_from_models(camera_models[0,:])
     input_path = os.path.join(config.root_dir,'images')
-    output_path = os.path.join(config.root_dir,'images_undistorted')
-    for root, dirs, files in os.walk(input_path):
-        if len(dirs) != 0:
-            for dir in dirs:
-                for file in files:
-                    img_path = os.path.join(root,dir,file)
-                    distorted = cv2.imread(img_path)
-                    undistorted = cv2.undistort(distorted,
-                                  dataset.K.numpy(),
-                                  dataset.camera_params
-                                  )
-                    undistorted=cv2.resize(undistorted,(dataset.img_wh[0],dataset.img_wh[1]))
-                    file_name = os.path.join(output_path,dir,file)
-                    cv2.imwrite(file_name,undistorted)
-        else:
-            for file in files:
-                img_path = os.path.join(root,file)
-                distorted = cv2.imread(img_path)
-                undistorted = cv2.undistort(distorted,
-                              dataset.K.numpy(),
-                              dataset.camera_params
-                              )
-                file_name = os.path.join(output_path,file)
-                cv2.imwrite(file_name,undistorted)
-    
+    file_patterns = os.path.join(input_path, '**/*')
+    file_paths = glob.glob(file_patterns, recursive=True)
+    pbar = tqdm(total=len(file_paths))
+    for file in file_paths:
+        file_name = file.replace("images","images_undistorted_{}".format(config.dataset.downsample))
+        if os.path.isdir(file):
+            os.makedirs(file_name,exist_ok=True)
+            continue
+        distorted = cv2.imread(file)
+        undistorted = cv2.undistort(distorted,
+                        K.numpy(),
+                        distortion
+                        )
+        undistorted = cv2.resize(undistorted,(dataset.img_wh[0],dataset.img_wh[1]))
+        cv2.imwrite(file_name,undistorted)
+        pbar.update(1)
+        

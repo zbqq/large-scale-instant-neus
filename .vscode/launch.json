@@ -9,6 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "./train.py",
+            // "program": "./downsample_and_undistortion.py",
             // "program": "./divide.py",
             // "program": "./bin2ply.py",
             

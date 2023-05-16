@@ -183,10 +183,10 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
         self.device_ = torch.device("cuda",self.local_rank)
 
-        self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=1.0)
+        self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=self.config.dataset.downsample)
         self.train_dataset.batch_size = self.config.dataset.batch_size
         
-        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=1.0)
+        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2)
         
         self.model = MODELS[self.config.model.name](self.config.model)
 
