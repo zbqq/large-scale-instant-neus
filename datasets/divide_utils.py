@@ -106,24 +106,15 @@ class divideTool():
                 rays_o = rays_o.to(self.device)
                 rays_d = rays_d.to(self.device)
                 aabb = grid._roi_aabb.to(self.device)
-                if self.model_num > 1:
-                    t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
-                    # intersect_pix_idx = torch.where(t_min<100)[0]#存放
-                    intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
-                    bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
-                    studio.packbits_u32(intersect_pix_idx,bits_array)
+                t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
+                # intersect_pix_idx = torch.where(t_min<100)[0]#存放
+                intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
+                bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
+                studio.packbits_u32(intersect_pix_idx,bits_array)
+                # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
+                if (t_min<100).sum() > 4000:
+
                     # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
-                    if (t_min<100).sum() > 4000:
-                        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
-                        torch.save({
-                            "bits_array":bits_array,
-                            "pose_idx":j,
-                            "rays_nums":intersect_pix_idx.sum()
-                        },os.path.join(self.mask_save_path,"{}".format(i),'metadata_{}.pt'.format(j)))  
-                else:
-                    intersect_pix_idx = torch.ones([bits_array_len],dtype=torch.int32).to(self.device)
-                    bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
-                    studio.packbits_u32(intersect_pix_idx,bits_array)
                     torch.save({
                         "bits_array":bits_array,
                         "pose_idx":j,

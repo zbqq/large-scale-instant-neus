@@ -25,7 +25,7 @@ class vanillaNeRF(baseModule):
             sigma = torch.sigmoid(sigma)[...,None]
             return sigma
         
-        self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.95)
+        self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.98)
         
     def get_alpha(self, sigma, dists):#计算
 

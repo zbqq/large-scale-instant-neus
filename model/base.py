@@ -43,8 +43,8 @@ class baseModule(nn.Module):
     
     def setup(self,center,scale):
         self.geometry_network.setup(center,scale)
-        # self.render_step_size = 1.732 * 2 * max(scale)/ self.config.num_samples_per_ray
-        self.render_step_size = 1.732 * 3 * scale[2]/ self.config.num_samples_per_ray
+        # self.render_step_size = 1.732 * 2.5 * max(scale)/ self.config.num_samples_per_ray
+        self.render_step_size = 1.732 * 2 * scale[2]/ self.config.num_samples_per_ray
         # 无人机视角下不包含
         
         self.register_buffer('scene_aabb', \

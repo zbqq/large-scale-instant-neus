@@ -144,7 +144,7 @@ class ImageProcess():#存储图像
     def save_image_grid(self, filename, imgs):
         img = self.get_image_grid_(imgs)
         cv2.imwrite(self.get_save_path(filename), img)
-    
+
 class BaseSystem(pl.LightningModule,ImageProcess):
     """
     Two ways to print to console:
@@ -167,43 +167,33 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         # self.max_hits = 1
         # self.grid_coords = self.grid_coords.to("cuda")
         # self.density_grid = self.density_grid.to("cuda")
-    def setup(self,stage):
-        # if num_gpu > 1:
-        self.device_ = torch.device("cuda",self.local_rank)
+        self.model_num = self.config.dataset.grid_X * self.config.dataset.grid_Y
+        if self.model_num> 1:
+            for i in range(0,self.model_num):
+                os.makedirs(os.path.join(self.config.save_dir,'{}'.format(i),'{}'.format(self.config.model.name)),exist_ok=True)
+                # 先实例化不setup不用占多少显存
+            pass
+        else:
+            os.makedirs(os.path.join(self.config.save_dir,'0','{}'.format(self.config.model.name)),exist_ok=True)
+
+        self.current_model_num = self.config.model_start_num # 训练到的第几个模型
+        self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
         
-        # if not self.config.is_continue:
-        # dataset = ColmapDataset(self.config.dataset)
+    def setup(self,stage):
+        
+        self.device_ = torch.device("cuda",self.local_rank)
+
         self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=1.0)
         self.train_dataset.batch_size = self.config.dataset.batch_size
         
-        # self.train_dataset.ray_sampling_strategy = self.config.dataset.ray_sampling_strategy
-        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2)
+        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=1.0)
         
-        # self.register_buffer('directions', self.train_dataset.directions.to(self.device_))
-        # self.register_buffer('poses', self.train_dataset.poses.to(self.device_))
-        # self.register_buffer('test_directions', self.test_dataset.directions.to(self.device_))
-        
-        # setattr(self,\
-        #     "model{}".format(self.current_model_num),
-        #     MODELS[self.config.model.name](self.config.model)) # 需要浅拷贝
-        # self.model = \
-        #     getattr(
-        #         self,"model{}".format(self.current_model_num),
-        #         MODELS[self.config.model.name](self.config.model))
         self.model = MODELS[self.config.model.name](self.config.model)
-        # setattr(self,\
-        #     "model{}".format(self.current_model_num),
-        #     MODELS[self.config.model.name](self.config.model)) # 需要浅拷贝
-        # self.model = \
-        #     getattr(
-        #         self,"model{}".format(self.current_model_num),
-        #         MODELS[self.config.model.name](self.config.model))
-        
+
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
                          self.train_dataset.scale[self.current_model_num,:])
         
         
-        self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         self.loss = NeRFLoss(config=self.config.system.loss,lambda_distortion=0)
         if self.config.is_continue:
             _,ckpt_path = load_ckpt_path(os.path.join(self.config.ckpt_dir,

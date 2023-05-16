@@ -12,7 +12,7 @@ if __name__ == '__main__':
     
     config = load_config(args.conf_path)
     
-    dataset = ColmapDataset(config.dataset,split='divide')
+    dataset = ColmapDataset(config.dataset,split='divide',downsample=config.dataset.downsample)
     grid_dim = torch.tensor([config.dataset.grid_X,
                              config.dataset.grid_Y,
                              1])

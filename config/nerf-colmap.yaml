@@ -3,9 +3,11 @@ tag: ''
 
 # seed: 42
 seed: 37
-case_name: magicSqure
-# root_dir: /data3/zzy/data_lab/${case_name}
-root_dir: /data3/zzy/public_data/${case_name}
+# case_name: magicSqure
+# case_name: scan65
+case_name: DJI951
+root_dir: /data3/zzy/data_lab/${case_name}
+# root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
 grid_X: 1
 grid_Y: 1
@@ -17,6 +19,7 @@ validate_freq: 300
 is_continue: false
 use_DDP: false
 dataset:
+  downsample: 0.4
   use_random: true
   name: colmap
   root_dir: ${root_dir}
@@ -37,8 +40,6 @@ model:
   name: nerf
   aabb:
     use_custom_radius: false
-    radius: 5
-    radius_z: 1.22
   grid_update_freq: 16
   grid_resolution: 128 # 128
   num_samples_per_ray: 512 # 512
@@ -48,8 +49,6 @@ model:
   batch_image_sampling: true
   randomized: true
   ray_chunk: 4096
-  init_variance: 0.05
-  cos_anneal_end: 50
   geometry_network:
     radius: ${model.aabb.radius}
     radius_z: ${model.aabb.radius_z}
@@ -106,7 +105,7 @@ system:
   name: nerf-system
   loss:
     lambda_rgb: 1.
-    lambda_opacity: 0.3
+    lambda_opacity: 0.1
     lambda_mask: 0.
   optimizer:
     # name: Adam
@@ -116,7 +115,7 @@ system:
       eps: 1.e-15
     params:
       geometry_network:
-          lr: 6.e-3
+          lr: 3.e-3
       color_net:
           lr: 3.e-3
   scheduler:

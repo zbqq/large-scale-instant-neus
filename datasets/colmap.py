@@ -27,16 +27,29 @@ class ColmapDataset(BaseDataset,divideTool):
             fx = fy = camdata[1].params[0]*self.downsample
             cx = camdata[1].params[1]*self.downsample
             cy = camdata[1].params[2]*self.downsample
-        elif camdata[1].model in ['PINHOLE', 'OPENCV']:
+        elif camdata[1].model == 'PINHOLE':
             fx = camdata[1].params[0]*self.downsample
             fy = camdata[1].params[1]*self.downsample
             cx = camdata[1].params[2]*self.downsample
             cy = camdata[1].params[3]*self.downsample
+        elif camdata[1].model == 'OPENCV':
+            fx = camdata[1].params[0]*self.downsample
+            fy = camdata[1].params[1]*self.downsample
+            cx = camdata[1].params[2]*self.downsample
+            cy = camdata[1].params[3]*self.downsample
+            self.camera_params = np.array([camdata[1].params[4],
+                                          camdata[1].params[5],
+                                          camdata[1].params[6],
+                                          camdata[1].params[7]
+                                          ])
+            
         else:
             raise ValueError(f"Please parse the intrinsics for camera model {camdata[1].model}!")
+        self.camera_model = camdata[1].model
         self.K = torch.FloatTensor([[fx, 0, cx],
                                     [0, fy, cy],
                                     [0,  0,  1]])
+        
         # self.K_inv = torch.linalg.inv(self.K).to(self.device)
         # self.directions = get_ray_directions(h, w, self.K).to(self.device)#相机坐标系下的dirs，也即归一化坐标|1
         self.K_inv = torch.linalg.inv(self.K)

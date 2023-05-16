@@ -19,26 +19,12 @@ class NeRFSystem(BaseSystem):
     def __init__(self,config):
         super().__init__(config)#最初的config
         #init不能将所有的模型都实例化
-        self.model_num = self.config.dataset.grid_X * self.config.dataset.grid_Y
-        if self.model_num> 1:
-            for i in range(0,self.model_num):
-                os.makedirs(os.path.join(self.config.save_dir,'{}'.format(i),'{}'.format(self.config.model.name)),exist_ok=True)
-                # 先实例化不setup不用占多少显存
-            pass
-        else:
-            os.makedirs(os.path.join(self.config.save_dir,'0','{}'.format(self.config.model.name)),exist_ok=True)
-
-        self.current_model_num = self.config.model_start_num # 训练到的第几个模型
-        self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
-        
-        
-        
+        pass
     def on_train_start(self):
         # self.model.mark_invisible_cells(self.train_dataset.K.to(self.device),
         #                                 self.poses,
         #                                 self.train_dataset.img_wh)
         pass
-
     def configure_optimizers(self):
         
         self.train_dataset.device = self.device
@@ -52,8 +38,13 @@ class NeRFSystem(BaseSystem):
         # self.net_opt=torch.optim.Adam(net_params, self.config.system.optimizer.args.lr,eps=self.config.system.optimizer.args.eps)
         # self.net_opt = FusedAdam(net_params, lr=self.config.system.optimizer.lr, eps=self.config.system.optimizer.eps)
         
+        self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(self.net_opt,step_size=self.config.system.scheduler.args.step_size,gamma=self.config.system.scheduler.args.gamma)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(\
+            self.net_opt,
+            step_size=self.config.system.scheduler.args.step_size,
+            gamma=self.config.system.scheduler.args.gamma
+            )
         # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.net_opt,gamma=self.config.system.scheduler.args.gamma)
         
         # return [self.net_opt],[lr_scheduler]
