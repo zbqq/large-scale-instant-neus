@@ -48,9 +48,10 @@ class divideTool():
         self.centers=[]
     def gen_centers_from_pts(self,grid_dim:Tensor):
         pts = torch.tensor(np.loadtxt(self.new_pts3d_path,usecols=(0,1,2)),dtype=torch.float32)
-        min_position = pts.min(dim=0)[0]
+        min_position = pts.min(dim=0)[0]#是否需要扩大一点?
         max_position = pts.max(dim=0)[0]
-        radius = (max_position-min_position)/grid_dim/2# grid的半径
+        
+        radius = (max_position-min_position)/grid_dim/2 * 1.5# grid的半径，扩大1.5倍以实现有重叠
         ranges = max_position - min_position
         offsets = [torch.arange(s) * ranges[i] / s + ranges[i] / (s * 2) for i, s in enumerate(grid_dim)]#每个方格的中心world
         
@@ -71,8 +72,9 @@ class divideTool():
         for i in range(0,centroids.shape[0]):
             center = centroids[i,:].reshape(3,-1)
             self.centers.append(center)
-            # scene_aabb = get_aabb(center=center,scale=torch.cat([radius[:2],torch.tensor([0.3])]).view(3,1))#divide时需要将scale_z变得很小
-            scene_aabb = get_aabb(center=center,scale=radius[:3].view(3,1))#divide时需要将scale_z变得很小
+            scene_aabb = get_aabb(center=center,scale=torch.cat([radius[:2],torch.tensor([0.2])]).view(3,1))#divide时需要将scale_z变得很小
+            # scene_aabb = get_aabb(center=center,scale=radius[:3].view(3,1))#divide时需要将scale_z变得很小
+
             self.aabbs.append(scene_aabb)
             center_and_scale.append(torch.concat([center.view(3),radius.view(3)]))
             

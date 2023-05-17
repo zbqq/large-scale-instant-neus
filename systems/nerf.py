@@ -38,7 +38,6 @@ class NeRFSystem(BaseSystem):
         # self.net_opt=torch.optim.Adam(net_params, self.config.system.optimizer.args.lr,eps=self.config.system.optimizer.args.eps)
         # self.net_opt = FusedAdam(net_params, lr=self.config.system.optimizer.lr, eps=self.config.system.optimizer.eps)
         
-        self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         
         lr_scheduler = torch.optim.lr_scheduler.StepLR(\
             self.net_opt,
@@ -60,6 +59,7 @@ class NeRFSystem(BaseSystem):
         }
     def forward(self, batch,split):
         if split == 'train':
+
             # poses = batch['pose']
             poses = self.poses[batch['pose_idx']]
             dirs = batch['directions']
@@ -87,6 +87,7 @@ class NeRFSystem(BaseSystem):
             "pose":pose [3 4]
         }
         """
+
         if self.global_step%self.config.model.grid_update_freq == 0:
             self.model.update_step(5,self.global_step)
         render_out = self(batch,split='train')

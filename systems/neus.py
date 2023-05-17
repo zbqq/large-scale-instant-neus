@@ -22,11 +22,11 @@ class NeuSSystem(BaseSystem):
         self.model_num = self.config.dataset.grid_X * self.config.dataset.grid_Y
         if self.model_num> 1:
             for i in range(0,self.model_num):
-                os.makedirs(os.path.join(self.config.save_dir,'{}'.format(i),'{}'.format(self.config.model.name)),exist_ok=True)
+                os.makedirs(os.path.join(self.config.ckpt_dir,'{}'.format(i),'{}'.format(self.config.model.name)),exist_ok=True)
                 # 先实例化不setup不用占多少显存
             pass
         else:
-            os.makedirs(os.path.join(self.config.save_dir,'0','{}'.format(self.config.model.name)),exist_ok=True)
+            os.makedirs(os.path.join(self.config.ckpt_dir,'0','{}'.format(self.config.model.name)),exist_ok=True)
 
         self.current_model_num = self.config.model_start_num # 训练到的第几个模型
         self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型

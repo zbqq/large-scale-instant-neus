@@ -182,7 +182,7 @@ class BaseDataset(IterableDataset):
                 studio.un_packbits_u32(idx_array,bits_array)
                 idx_array = idx_array.to(torch.bool).to("cpu")
                 true_idx = get_trueIdx(idx_array,self.batch_size)
-                if true_idx.shape[0] < 2000:
+                if true_idx.shape[0] < 4000:
                     self.idx_tmp += 1
                     del item,idx_array,bits_array
                     continue

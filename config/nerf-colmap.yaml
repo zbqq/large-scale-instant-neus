@@ -5,19 +5,19 @@ tag: ''
 seed: 37
 # case_name: magicSqure
 # case_name: scan65
-# case_name: DJI951
-case_name: ObliqueSBY1580
+case_name: DJI951
+# case_name: ObliqueSBY1580
 root_dir: /data3/zzy/data_lab/${case_name}
 # root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
-grid_X: 3
-grid_Y: 3
+grid_X: 1
+grid_Y: 1
 mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
 model_start_num: 0 # 开始从第几个模型训练
 validate_freq: 300
-is_continue: false
+is_continue: true
 use_DDP: false
 dataset:
   downsample: 0.4 #训练集的降采样率

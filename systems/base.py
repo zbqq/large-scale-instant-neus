@@ -180,7 +180,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
         
     def setup(self,stage):
-        
+        self.discard_step = 0
         self.device_ = torch.device("cuda",self.local_rank)
 
         self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=self.config.dataset.downsample)
@@ -193,6 +193,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
                          self.train_dataset.scale[self.current_model_num,:])
         
+        self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         
         self.loss = NeRFLoss(config=self.config.system.loss,lambda_distortion=0)
         if self.config.is_continue:
@@ -236,7 +237,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         checkpoint = {
             'model': self.model.state_dict(),
             'optimizer': self.net_opt.state_dict(), #
-            'epoch_step': self.global_step,
+            'epoch_step': self.global_step + self.discard_step,
             'current_model_num': self.current_model_num,
         }
         torch.save(
@@ -245,7 +246,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
                                 '{}'.format(self.config.model.name),
                                 '{}-'.format(self.config.model.name)+
                                 '{}-'.format(self.config.case_name)+
-                                'ckpt_{:0>6d}.pt'.format(self.global_step)
+                                'ckpt_{:0>6d}.pt'.format(self.global_step+self.discard_step)
                                 ))
     def load_checkpoint(self,ckpt_path=None):
         if ckpt_path == None: return
@@ -254,8 +255,9 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         # self.global_step = system_dict['epoch_step']
         self.model.load_state_dict(system_dict['model'])
         self.net_opt.load_state_dict(system_dict['optimizer'])
+        self.discard_step = system_dict['epoch_step']
+        
         # pass
-    
     def validation_step(self, batch, batch_idx):#在traing_epoch_end之后
         """
             batch:{
@@ -274,7 +276,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         rgbs_val = out["rgb"].view(H, W, 3)
         depth = out['depth'].view(H, W)
         # opacity = out['opacity'].view(H, W)
-        self.save_image_grid(f"model_{self.current_model_num}_it{self.global_step}_{batch['pose_idx']}.png", [
+        self.save_image_grid(f"model_{self.current_model_num}_it{self.global_step+self.discard_step}_{batch['pose_idx']}.png", [
             {'type': 'rgb', 'img': rgbs_true, 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': rgbs_val, 'kwargs': {'data_format': 'HWC'}},
             {'type': 'grayscale', 'img': depth, 'kwargs': {}},
