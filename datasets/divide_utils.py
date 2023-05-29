@@ -139,12 +139,13 @@ class divideTool():
         for i in range(0,len(matrices)):
             R_correct = torch.tensor(matrices[i]) @ R_correct
         return R_correct
-    def scale_to(self,scale):
+    def scale_to(self,scale,current_model_idx):
         max_scale = self.scales[0].max()
         factor = scale/max_scale
         self.centers *= factor
         self.poses[...,3] *= factor
         self.scales *= factor
+        self.poses[...,3] -= self.centers[current_model_idx].view(-1,3)
         
         
         

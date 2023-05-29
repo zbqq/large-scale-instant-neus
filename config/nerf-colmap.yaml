@@ -17,7 +17,7 @@ save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
 model_start_num: 0 # 开始从第几个模型训练
 validate_freq: 300
-is_continue: true
+is_continue: false
 use_DDP: false
 dataset:
   downsample: 0.4 #训练集的图像降采样率

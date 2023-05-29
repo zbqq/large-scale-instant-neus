@@ -101,7 +101,7 @@ class baseModule(nn.Module):
         
         N=rays_o.shape[0]
         nears,fars = near_far_from_aabb(
-            rays_o,rays_d,self.scene_aabb,0.2
+            rays_o,rays_d,self.scene_aabb,min_near=0.2
         )
         if cam_near_far is not None:
             nears = torch.maximum(nears, cam_near_far[:, 0])
@@ -117,7 +117,7 @@ class baseModule(nn.Module):
             xyzs, dirs, ts, rays = \
                 march_rays_train(rays_o, rays_d, self.scale, 
                                         True, self.density_bitfield, 
-                                        self.cascade, self.grid_size, 
+                                        self.C, self.H, 
                                         nears, fars, perturb, 
                                         self.opt.dt_gamma, self.opt.max_steps)
 
