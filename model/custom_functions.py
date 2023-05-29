@@ -160,7 +160,7 @@ class _march_rays_train(torch.autograd.Function):
                 rays, step_counter, noises)
         
         M = step_counter.item()
-
+        # M=50000
         xyzs = torch.zeros(M, 3, dtype=rays_o.dtype, device=rays_o.device)
         dirs = torch.zeros(M, 3, dtype=rays_o.dtype, device=rays_o.device)
         ts = torch.zeros(M, 2, dtype=rays_o.dtype, device=rays_o.device)
@@ -169,10 +169,6 @@ class _march_rays_train(torch.autograd.Function):
         studio.march_rays_train(rays_o, rays_d, density_bitfield, bound, contract, dt_gamma, max_steps, N, C, H, nears, fars, xyzs, dirs, ts, rays, step_counter, noises)
 
         return xyzs, dirs, ts, rays
-        
-        
-        
-
     @staticmethod
     @custom_bwd
     def backward(ctx, dL_drays_a, dL_dxyzs, dL_ddirs,
@@ -186,53 +182,93 @@ class _march_rays_train(torch.autograd.Function):
         return dL_drays_o, dL_drays_d, None, None, None, None, None, None, None
 march_rays_train=_march_rays_train.apply
 
-class VolumeRenderer(torch.autograd.Function):
-    """
-    Volume rendering with different number of samples per ray
-    Used in training only
 
-    Inputs:
-        sigmas: (N)
-        rgbs: (N, 3)
-        deltas: (N)
-        ts: (N)
-        rays_a: (N_rays, 3) ray_idx, start_idx, N_samples
-                meaning each entry corresponds to the @ray_idx th ray,
-                whose samples are [start_idx:start_idx+N_samples]
-        T_threshold: float, stop the ray if the transmittance is below it
 
-    Outputs:
-        total_samples: int, total effective samples
-        opacity: (N_rays)
-        depth: (N_rays)
-        rgb: (N_rays, 3)
-        ws: (N) sample point weights
-    """
+class _composite_rays_train(torch.autograd.Function):
     @staticmethod
-    @torch.cuda.amp.autocast()
     @custom_fwd(cast_inputs=torch.float32)
-    def forward(ctx, sigmas, rgbs, deltas, ts, rays_a, T_threshold):
-        total_samples, opacity, depth, rgb, ws = \
-            studio.composite_train_fw(sigmas, rgbs, deltas, ts,
-                                    rays_a, T_threshold)
-        ctx.save_for_backward(sigmas, rgbs, deltas, ts, rays_a,
-                              opacity, depth, rgb, ws)
-        ctx.T_threshold = T_threshold
-        return total_samples.sum(), opacity, depth, rgb, ws
+    def forward(ctx, sigmas, rgbs, ts, rays, T_thresh=1e-4):
+        ''' composite rays' rgbs, according to the ray marching formula.
+        Args:
+            rgbs: float, [M, 3]
+            sigmas: float, [M,]
+            ts: float, [M, 2]
+            rays: int32, [N, 3]
+        Returns:
+            weights: float, [M]
+            weights_sum: float, [N,], the alpha channel
+            depth: float, [N, ], the Depth
+            image: float, [N, 3], the RGB channel (after multiplying alpha!)
+        '''
+        
+        sigmas = sigmas.float().contiguous()
+        rgbs = rgbs.float().contiguous()
 
+        M = sigmas.shape[0]
+        N = rays.shape[0]
+
+        weights = torch.zeros(M, dtype=sigmas.dtype, device=sigmas.device) # may leave unmodified, so init with 0
+        weights_sum = torch.empty(N, dtype=sigmas.dtype, device=sigmas.device)
+
+        depth = torch.empty(N, dtype=sigmas.dtype, device=sigmas.device)
+        image = torch.empty(N, 3, dtype=sigmas.dtype, device=sigmas.device)
+
+        studio.composite_rays_train_forward(sigmas, rgbs, ts, rays, M, N, T_thresh, weights, weights_sum, depth, image)
+
+        ctx.save_for_backward(sigmas, rgbs, ts, rays, weights_sum, depth, image)
+        ctx.dims = [M, N, T_thresh]
+
+        return weights, weights_sum, depth, image
+    
     @staticmethod
     @custom_bwd
-    def backward(ctx, dL_dtotal_samples, dL_dopacity, dL_ddepth, dL_drgb, dL_dws):
-        sigmas, rgbs, deltas, ts, rays_a, \
-        opacity, depth, rgb, ws = ctx.saved_tensors
-        dL_dsigmas, dL_drgbs = \
-            studio.composite_train_bw(dL_dopacity, dL_ddepth, dL_drgb, dL_dws,
-                                    sigmas, rgbs, ws, deltas, ts,
-                                    rays_a,
-                                    opacity, depth, rgb,
-                                    ctx.T_threshold)
-        return dL_dsigmas, dL_drgbs, None, None, None, None
+    def backward(ctx, grad_weights, grad_weights_sum, grad_depth, grad_image):
+        
+        grad_weights = grad_weights.contiguous()
+        grad_weights_sum = grad_weights_sum.contiguous()
+        grad_depth = grad_depth.contiguous()
+        grad_image = grad_image.contiguous()
 
+        sigmas, rgbs, ts, rays, weights_sum, depth, image = ctx.saved_tensors
+        M, N, T_thresh = ctx.dims
+   
+        grad_sigmas = torch.zeros_like(sigmas)
+        grad_rgbs = torch.zeros_like(rgbs)
+
+        studio.composite_rays_train_backward(grad_weights, grad_weights_sum, grad_depth, grad_image, sigmas, rgbs, ts, rays, weights_sum, depth, image, M, N, T_thresh, grad_sigmas, grad_rgbs)
+
+        return grad_sigmas, grad_rgbs, None, None, None
+
+
+composite_rays_train = _composite_rays_train.apply
+
+class _packbits(torch.autograd.Function):
+    @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
+    def forward(ctx, grid, thresh, bitfield=None):
+        ''' packbits, CUDA implementation
+        Pack up the density grid into a bit field to accelerate ray marching.
+        Args:
+            grid: float, [C, H * H * H], assume H % 2 == 0
+            thresh: float, threshold
+        Returns:
+            bitfield: uint8, [C, H * H * H / 8]
+        '''
+        if not grid.is_cuda: grid = grid.cuda()
+        grid = grid.contiguous()
+
+        C = grid.shape[0]
+        H3 = grid.shape[1]
+        N = C * H3 // 8
+
+        if bitfield is None:
+            bitfield = torch.empty(N, dtype=torch.uint8, device=grid.device)
+
+        studio.packbits(grid, N, thresh, bitfield)
+
+        return bitfield
+
+packbits = _packbits.apply
 
 class TruncExp(torch.autograd.Function):
     @staticmethod

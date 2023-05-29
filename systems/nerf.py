@@ -13,7 +13,6 @@ from model.loss import NeRFLoss
 from datasets.colmap import ColmapDataset
 from model.nerf import vanillaNeRF
 from load_tool import draw_poses
-from utils.utils import parse_optimizer
 from utils.utils import load_ckpt_path
 class NeRFSystem(BaseSystem):
     def __init__(self,config):
@@ -25,38 +24,7 @@ class NeRFSystem(BaseSystem):
         #                                 self.poses,
         #                                 self.train_dataset.img_wh)
         pass
-    def configure_optimizers(self):
-        
-        self.train_dataset.device = self.device
-        self.register_buffer('directions', self.train_dataset.directions.to(self.device))
-        self.register_buffer('poses', self.train_dataset.poses.to(self.device))
-        self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
-        # opts=[]
-        # for n, p in self.model.named_parameters():
-        #     if n not in ['dR', 'dT']: net_params += [p]
-        
-        # self.net_opt=torch.optim.Adam(net_params, self.config.system.optimizer.args.lr,eps=self.config.system.optimizer.args.eps)
-        # self.net_opt = FusedAdam(net_params, lr=self.config.system.optimizer.lr, eps=self.config.system.optimizer.eps)
-        
-        
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(\
-            self.net_opt,
-            step_size=self.config.system.scheduler.args.step_size,
-            gamma=self.config.system.scheduler.args.gamma
-            )
-        # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.net_opt,gamma=self.config.system.scheduler.args.gamma)
-        
-        # return [self.net_opt],[lr_scheduler]
-        return {
-            "optimizer":self.net_opt,
-            "lr_scheduler":{
-                "scheduler":lr_scheduler,
-                "interval":"step",
-                "frequency": 1,
-                "strict": True,
-                "name": None,
-            }
-        }
+    
     def forward(self, batch,split):
         if split == 'train':
 

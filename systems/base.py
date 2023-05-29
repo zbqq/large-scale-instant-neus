@@ -189,7 +189,6 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2)
         
         self.model = MODELS[self.config.model.name](self.config.model)
-
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
                          self.train_dataset.scales[self.current_model_num,:])
         
@@ -203,6 +202,41 @@ class BaseSystem(pl.LightningModule,ImageProcess):
                                        ) 
             self.load_checkpoint(ckpt_path)
 
+        
+    def configure_optimizers(self):
+        
+        self.train_dataset.device = self.device
+        self.model.to(self.device)
+        self.register_buffer('directions', self.train_dataset.directions.to(self.device))
+        self.register_buffer('poses', self.train_dataset.poses.to(self.device))
+        self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
+        # opts=[]
+        # for n, p in self.model.named_parameters():
+        #     if n not in ['dR', 'dT']: net_params += [p]
+        
+        # self.net_opt=torch.optim.Adam(net_params, self.config.system.optimizer.args.lr,eps=self.config.system.optimizer.args.eps)
+        # self.net_opt = FusedAdam(net_params, lr=self.config.system.optimizer.lr, eps=self.config.system.optimizer.eps)
+        
+        
+        # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.net_opt,gamma=self.config.system.scheduler.args.gamma)
+        
+        # return [self.net_opt],[lr_scheduler]
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(\
+            self.net_opt,
+            step_size=self.config.system.scheduler.args.step_size,
+            gamma=self.config.system.scheduler.args.gamma
+            )
+        return {
+            "optimizer":self.net_opt,
+            "lr_scheduler":{
+                "scheduler":lr_scheduler,
+                "interval":"step",
+                "frequency": 1,
+                "strict": True,
+                "name": None,
+            }
+        }
+        
     def forward(self, batch):
         raise NotImplementedError
     def preprocess_data(self, batch, stage):

@@ -113,6 +113,7 @@ class divideTool():
                 intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
                 bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
                 studio.packbits_u32(intersect_pix_idx,bits_array)
+                bits_array = bits_array.to('cpu')
                 # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
                 if (t_min<100).sum() > 4000:
 

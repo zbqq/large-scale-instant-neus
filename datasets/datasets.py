@@ -178,7 +178,7 @@ class BaseDataset(IterableDataset):
             while True: # batch_num由__len__确定
                 item = torch.load(self.mask_name[self.idx_list[self.idx_tmp]])
                 idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32).to(self.device)
-                bits_array = item['bits_array']
+                bits_array = item['bits_array'].to(self.device)
                 studio.un_packbits_u32(idx_array,bits_array)
                 idx_array = idx_array.to(torch.bool).to("cpu")
                 true_idx = get_trueIdx(idx_array,self.batch_size)

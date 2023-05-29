@@ -44,7 +44,10 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
                pts3d:ndarray = None,
                aabb_=None,
                aabb_idx=None,
-               img_wh=None)->None:
+               img_wh=None,
+               t_min=None,
+               t_max=None
+               )->None:
     if isinstance(poses_,Tensor):         
         poses=poses_[None,:,:].to("cpu").numpy()
     
@@ -80,8 +83,16 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
     if rays_o_ is not None:
         rays_o = rays_o_.to("cpu")
         rays_d = rays_d_.to("cpu")
+        t_max_ = t_max.to("cpu")
+        t_min_ = t_min.to("cpu")
+        
+        if t_min is not None:
+            rays = rays_o+rays_d*t_max_.view(-1,1)
+            # rays = rays_o+rays_d*t_min_.view(-1,1)
+        else:
+            rays = rays_o+rays_d*5
         ax.scatter([rays_o[0,0]],[rays_o[0,1]],[rays_o[0,2]],color='r')
-        rays = rays_o+rays_d*5
+        
         # for i in range(0,rays_d.shape[0],int(rays_d.shape[0]/500)):
         # for i in range(0,rays_d.shape[0]):
             # ax.plot([rays_o[0,0],rays[i,0]],[rays_o[0,1],rays[i,1]],[rays_o[0,2],rays[i,2]],color='b')

@@ -45,7 +45,7 @@ class RenderingNet(nn.Module):
             n_output_dims=3,
             network_config=self.color_config
         )
-    def forward(self,d,fea):
+    def forward(self,d,fea,normal=None):
         """
             d:[N , 3]
             fea:[N, fea_name]
@@ -53,7 +53,10 @@ class RenderingNet(nn.Module):
         d = (d + 1.0) / 2.0
         d_embd = self.dir_encoder(d)
         # h = torch.cat([pts, d,gradients, geo_fea], dim=-1)
-        h = torch.cat([d_embd,fea], dim=-1)
+        if self.config["use_normal"]:
+            h = torch.cat([d_embd,fea,normal], dim=-1)
+        else:
+            h = torch.cat([d_embd,fea], dim=-1)
         h = self.decoder(h)
         rgbs = h
         return rgbs
@@ -204,6 +207,7 @@ class vanillaMLP(baseImplicitRep):
         
         pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T)
         # with torch.set_grad_enabled(with_grad):#罪魁祸首
+        
         with torch.enable_grad():
             if with_grad:
                 pts = pts.requires_grad_(True)
