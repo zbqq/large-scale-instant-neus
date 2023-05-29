@@ -7,6 +7,7 @@ from utils.utils import load_ckpt_path
 import numpy as np
 import cv2
 import os
+from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
 
 from datasets.colmap import ColmapDataset
 from model.loss import NeRFLoss
@@ -101,13 +102,15 @@ class mainSystem(pl.LightningModule,ImageProcess):
         dirs = batch['directions']
         # dirs = self.directions
         rays_o, rays_d = get_rays(dirs,poses)
+        for i in range(0,len(self.models)):
+            t_min,t_max = ray_aabb_intersect(
+                
+            )
         
         
         
         
         
-        
-        del dirs,poses
         
         
         

@@ -20,7 +20,8 @@ validate_freq: 300
 is_continue: true
 use_DDP: false
 dataset:
-  downsample: 0.4 #训练集的降采样率
+  downsample: 0.4 #训练集的图像降采样率
+  scale_to: 8 #scale放缩至该绝对尺度
   use_random: true
   name: colmap
   root_dir: ${root_dir}
@@ -45,7 +46,7 @@ model:
   grid_resolution: 128 # 128
   num_samples_per_ray: 512 # 512
   grid_prune: true
-  use_nerfacc: true
+  use_nerfacc: false
   dynamic_ray_sampling: true
   batch_image_sampling: true
   randomized: true

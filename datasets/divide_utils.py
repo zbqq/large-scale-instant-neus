@@ -92,8 +92,8 @@ class divideTool():
     def load_centers(self):
         temp = torch.tensor(np.loadtxt(self.centers_and_scales_path),dtype=torch.float32)
         self.centers = temp[...,:3].view(-1,3)
-        self.scale = temp[...,3:].view(-1,3)+torch.tensor([4,4,3]).view(1,3)
-        
+        self.scales = temp[...,3:].view(-1,3)+torch.tensor([4,4,3]).view(1,3)
+    
     def divide(self,grid_dim):#从已经得到的sparse pts进行区域的分割，
         """
             
@@ -139,8 +139,12 @@ class divideTool():
         for i in range(0,len(matrices)):
             R_correct = torch.tensor(matrices[i]) @ R_correct
         return R_correct
-        
-        
+    def scale_to(self,scale):
+        max_scale = self.scales[0].max()
+        factor = scale/max_scale
+        self.centers *= factor
+        self.poses[...,3] *= factor
+        self.scales *= factor
         
         
         

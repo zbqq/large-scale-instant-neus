@@ -1,12 +1,7 @@
 binding.cpp
-distance_mask.cu
-intersection.cu
-losses.cu
-mega_nerf_mask.cu
-packbits.cu
-raymarching.cu
+divide_mask.cu
+ray_marching_merf.cu
 setup.py
-volumerendering.cu
 studio.egg-info/PKG-INFO
 studio.egg-info/SOURCES.txt
 studio.egg-info/dependency_links.txt

@@ -21,13 +21,8 @@ rule cuda_compile
 
 
 build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o: compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/binding.cpp
-build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/raymarching.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/raymarching.cu
-build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/distance_mask.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/distance_mask.cu
-build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/losses.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/losses.cu
-build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/packbits.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/packbits.cu
-build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/intersection.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/intersection.cu
-build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/volumerendering.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/volumerendering.cu
-build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/mega_nerf_mask.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/mega_nerf_mask.cu
+build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/divide_mask.cu
+build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/ray_marching_merf.cu
 
 
 

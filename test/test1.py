@@ -179,15 +179,15 @@ if __name__ == '__main__':
     # print(add_pts.grad)
     
     # dist.init_process_group(backend='nccl', init_method='env://')
-    
-    dirsMap = torch.rand([10000,3]).to("cuda")
-    locMap = torch.zeros([3]).to("cuda")
-    centroids = torch.zeros([8,3]).to("cuda")
-    mask = torch.zeros([10000,8],dtype = torch.int32).to("cuda")
-    img_w = np.array([500],dtype = np.int32)[0]
-    threshould = 1.2
-    mask2 = studio.distance_mask(dirsMap,locMap,centroids,mask,threshould)
-    print(mask.sum())
+    print(os.path.dirname(os.path.abspath(__file__)))
+    # dirsMap = torch.rand([10000,3]).to("cuda")
+    # locMap = torch.zeros([3]).to("cuda")
+    # centroids = torch.zeros([8,3]).to("cuda")
+    # mask = torch.zeros([10000,8],dtype = torch.int32).to("cuda")
+    # img_w = np.array([500],dtype = np.int32)[0]
+    # threshould = 1.2
+    # mask2 = studio.distance_mask(dirsMap,locMap,centroids,mask,threshould)
+    # print(mask.sum())
     
     
     # pass

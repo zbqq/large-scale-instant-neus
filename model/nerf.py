@@ -7,7 +7,6 @@ import torch.nn.functional as F
 import torch
 from .tcnn_nerf import vanillaMLP,RenderingNet
 from .base import baseModule
-from .render_utils import render_without_nerfacc
 NEAR_DISTANCE = 0.01
 
 class vanillaNeRF(baseModule):
@@ -33,7 +32,7 @@ class vanillaNeRF(baseModule):
 
         return alpha    
 
-    def forward(self,rays_o,rays_d):
+    def forward(self,rays_o,rays_d,split):
         if self.config.use_nerfacc:
             sigma_grad_samples=[]
             def alpha_fn(t_starts, t_ends, ray_indices):

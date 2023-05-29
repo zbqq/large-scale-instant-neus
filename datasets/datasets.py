@@ -246,7 +246,7 @@ if __name__ == "__main__":
     conf_text = f.read()
     conf_text = conf_text.replace('CASE_NAME', args.case)
     f.close()
-    # conf = ConfigFactory.parse_string(conf_text)
+    conf = ConfigFactory.parse_string(conf_text)
     conf['dataset.data_dir'] = conf['dataset.data_dir'].replace('CASE_NAME', args.case)
     
     ddd = Dataset(conf['dataset'])

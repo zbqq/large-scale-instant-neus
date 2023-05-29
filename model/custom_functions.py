@@ -5,54 +5,110 @@ from torch_scatter import segment_csr
 from einops import rearrange
 
 
-class RayAABBIntersector(torch.autograd.Function):
-    """
-    Computes the intersections of rays and axis-aligned voxels.
-
-    Inputs:
-        rays_o: (N_rays, 3) ray origins
-        rays_d: (N_rays, 3) ray directions
-        centers: (N_voxels, 3) voxel centers
-        half_sizes: (N_voxels, 3) voxel half sizes
-        max_hits: maximum number of intersected voxels to keep for one ray
-                  (for a cubic scene, this is at most 3*N_voxels^(1/3)-2)
-
-    Outputs:
-        hits_cnt: (N_rays) number of hits for each ray
-        (followings are from near to far)
-        hits_t: (N_rays, max_hits, 2) hit t's (-1 if no hit)
-        hits_voxel_idx: (N_rays, max_hits) hit voxel indices (-1 if no hit)
-    """
+class _near_far_from_aabb(torch.autograd.Function):
     @staticmethod
     @custom_fwd(cast_inputs=torch.float32)
-    def forward(ctx, rays_o, rays_d, center, half_size, max_hits):
-        return studio.ray_aabb_intersect(rays_o, rays_d, center, half_size, max_hits)
+    def forward(ctx, rays_o, rays_d, aabb, min_near=0.2):
+        ''' near_far_from_aabb, CUDA implementation
+        Calculate rays' intersection time (near and far) with aabb
+        Args:
+            rays_o: float, [N, 3]
+            rays_d: float, [N, 3]
+            aabb: float, [6], (xmin, ymin, zmin, xmax, ymax, zmax)
+            min_near: float, scalar
+        Returns:
+            nears: float, [N]
+            fars: float, [N]
+        '''
+        if not rays_o.is_cuda: rays_o = rays_o.cuda()
+        if not rays_d.is_cuda: rays_d = rays_d.cuda()
 
+        rays_o = rays_o.contiguous().view(-1, 3)
+        rays_d = rays_d.contiguous().view(-1, 3)
 
-class RaySphereIntersector(torch.autograd.Function):
-    """
-    Computes the intersections of rays and spheres.
+        N = rays_o.shape[0] # num rays
 
-    Inputs:
-        rays_o: (N_rays, 3) ray origins
-        rays_d: (N_rays, 3) ray directions
-        centers: (N_spheres, 3) sphere centers
-        radii: (N_spheres, 3) radii
-        max_hits: maximum number of intersected spheres to keep for one ray
+        nears = torch.empty(N, dtype=rays_o.dtype, device=rays_o.device)
+        fars = torch.empty(N, dtype=rays_o.dtype, device=rays_o.device)
 
-    Outputs:
-        hits_cnt: (N_rays) number of hits for each ray
-        (followings are from near to far)
-        hits_t: (N_rays, max_hits, 2) hit t's (-1 if no hit)
-        hits_sphere_idx: (N_rays, max_hits) hit sphere indices (-1 if no hit)
-    """
+        studio.near_far_from_aabb(rays_o, rays_d, aabb, N, min_near, nears, fars)
+
+        return nears, fars
+near_far_from_aabb=_near_far_from_aabb.apply
+
+class _sph_from_ray(torch.autograd.Function):
     @staticmethod
     @custom_fwd(cast_inputs=torch.float32)
-    def forward(ctx, rays_o, rays_d, center, radii, max_hits):
-        return studio.ray_sphere_intersect(rays_o, rays_d, center, radii, max_hits)
+    def forward(ctx, rays_o, rays_d, radius):
+        ''' sph_from_ray, CUDA implementation
+        get spherical coordinate on the background sphere from rays.
+        Assume rays_o are inside the Sphere(radius).
+        Args:
+            rays_o: [N, 3]
+            rays_d: [N, 3]
+            radius: scalar, float
+        Return:
+            coords: [N, 2], in [-1, 1], theta and phi on a sphere. (further-surface)
+        '''
+        if not rays_o.is_cuda: rays_o = rays_o.cuda()
+        if not rays_d.is_cuda: rays_d = rays_d.cuda()
 
+        rays_o = rays_o.contiguous().view(-1, 3)
+        rays_d = rays_d.contiguous().view(-1, 3)
 
-class RayMarcher(torch.autograd.Function):
+        N = rays_o.shape[0] # num rays
+
+        coords = torch.empty(N, 2, dtype=rays_o.dtype, device=rays_o.device)
+
+        studio.sph_from_ray(rays_o, rays_d, radius, N, coords)
+
+        return coords
+sph_from_ray=_sph_from_ray.apply
+
+class _morton3D(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, coords):
+        ''' morton3D, CUDA implementation
+        Args:
+            coords: [N, 3], int32, in [0, 128) (for some reason there is no uint32 tensor in torch...) 
+            TODO: check if the coord range is valid! (current 128 is safe)
+        Returns:
+            indices: [N], int32, in [0, 128^3)
+            
+        '''
+        if not coords.is_cuda: coords = coords.cuda()
+        
+        N = coords.shape[0]
+
+        indices = torch.empty(N, dtype=torch.int32, device=coords.device)
+        
+        studio.morton3D(coords.int(), N, indices)
+
+        return indices
+morton3D=_morton3D.apply
+
+class _morton3D_invert(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, indices):
+        ''' morton3D_invert, CUDA implementation
+        Args:
+            indices: [N], int32, in [0, 128^3)
+        Returns:
+            coords: [N, 3], int32, in [0, 128)
+            
+        '''
+        if not indices.is_cuda: indices = indices.cuda()
+        
+        N = indices.shape[0]
+
+        coords = torch.empty(N, 3, dtype=torch.int32, device=indices.device)
+        
+        studio.morton3D_invert(indices.int(), N, coords)
+
+        return coords
+morton3D_invert=_morton3D_invert.apply
+
+class _march_rays_train(torch.autograd.Function):
     """
     March the rays to get sample point positions and directions.
 
@@ -76,28 +132,46 @@ class RayMarcher(torch.autograd.Function):
     """
     @staticmethod
     @custom_fwd(cast_inputs=torch.float32)
-    def forward(ctx, rays_o, rays_d, hits_t,
-                density_bitfield, cascades, scale, exp_step_factor,
-                grid_size, max_samples):
-        # noise to perturb the first sample of each ray
-        noise = torch.rand_like(rays_o[:, 0])
+    def forward(ctx, rays_o, rays_d, bound,contract,
+                density_bitfield, C, H, nears, fars,
+                perturb=False,dt_gamma=0,max_steps=1024):
 
-        rays_a, xyzs, dirs, deltas, ts, counter = \
-            studio.raymarching_train(
-                rays_o, rays_d, hits_t,
-                density_bitfield, cascades, scale,
-                exp_step_factor, noise, grid_size, max_samples)
+        rays_o = rays_o.float().contiguous().view(-1, 3)
+        rays_d = rays_d.float().contiguous().view(-1, 3)
+        density_bitfield = density_bitfield.contiguous()
+        
+        N = rays_o.shape[0]
+        
+        step_counter = torch.zeros(1, dtype=torch.int32, device=rays_o.device) # point counter, ray counter
+        
+        if perturb:
+            noises = torch.rand(N, dtype=rays_o.dtype, device=rays_o.device)
+        else:
+            noises = torch.zeros(N, dtype=rays_o.dtype, device=rays_o.device)
+            
+        rays = torch.empty(N, 2, dtype=torch.int32, device=rays_o.device) # id, offset, num_steps
+        
+        studio.march_rays_train(\
+            rays_o,rays_d,density_bitfield,bound,contract,dt_gamma,
+                max_steps,
+                N, C, H,
+                nears, fars, 
+                None, None, None, 
+                rays, step_counter, noises)
+        
+        M = step_counter.item()
 
-        total_samples = counter[0] # total samples for all rays
-        # remove redundant output
-        xyzs = xyzs[:total_samples]
-        dirs = dirs[:total_samples]
-        deltas = deltas[:total_samples]
-        ts = ts[:total_samples]
+        xyzs = torch.zeros(M, 3, dtype=rays_o.dtype, device=rays_o.device)
+        dirs = torch.zeros(M, 3, dtype=rays_o.dtype, device=rays_o.device)
+        ts = torch.zeros(M, 2, dtype=rays_o.dtype, device=rays_o.device)
 
-        ctx.save_for_backward(rays_a, ts)
+        # second pass: write outputs
+        studio.march_rays_train(rays_o, rays_d, density_bitfield, bound, contract, dt_gamma, max_steps, N, C, H, nears, fars, xyzs, dirs, ts, rays, step_counter, noises)
 
-        return rays_a, xyzs, dirs, deltas, ts, total_samples
+        return xyzs, dirs, ts, rays
+        
+        
+        
 
     @staticmethod
     @custom_bwd
@@ -110,7 +184,7 @@ class RayMarcher(torch.autograd.Function):
             segment_csr(dL_dxyzs*rearrange(ts, 'n -> n 1')+dL_ddirs, segments)
 
         return dL_drays_o, dL_drays_d, None, None, None, None, None, None, None
-
+march_rays_train=_march_rays_train.apply
 
 class VolumeRenderer(torch.autograd.Function):
     """
@@ -176,18 +250,3 @@ class TruncExp(torch.autograd.Function):
     
     
     
-class no_grad_normalize(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, gradients):
-        # noise to perturb the first sample of each ray
-        
-        torch.nn.functional.normalize(gradients,dim=-1)
-        # gradients_norm = torch.exp(gradients)
-        ctx.save_for_backward(gradients)
-
-        return gradients
-
-    @staticmethod
-    def backward(ctx, dL_dgn):
-        result, = ctx.saved_tensors
-        return dL_dgn, 

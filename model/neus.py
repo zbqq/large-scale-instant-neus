@@ -97,7 +97,7 @@ class NeuS(baseModule):
 
         alpha = ((p + 1e-6) / (c + 1e-6)).view(-1).clip(0.0, 1.0)
         return alpha  
-    def forward(self,rays_o,rays_d):
+    def forward(self,rays_o,rays_d,split):
         sdf_grad_samples = []
         
         

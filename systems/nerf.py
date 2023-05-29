@@ -69,7 +69,7 @@ class NeRFSystem(BaseSystem):
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
             # draw_poses(poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh,pts3d=self.train_dataset.pts3d)
             
-            return self.model(rays_o, rays_d)#返回render结果
+            return self.model(rays_o, rays_d,split)#返回render结果
         else:
             poses = self.poses[batch['pose_idx']]
             dirs = self.test_directions# 一副图像

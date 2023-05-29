@@ -78,9 +78,11 @@ class ColmapDataset(BaseDataset,divideTool):
         self.R_correct = self.get_R_correct()
         #校正poses，这里的poses是所有的poses
         self.poses = (self.R_correct[None,...] @ torch.linalg.inv(w2c_mats))[perm, :3] # (N_images, 3, 4) cam2world matrices
+        
         self.grid_dim = torch.tensor([self.config.grid_X,
                              self.config.grid_Y,
                              1])
+        
         # if self.split == 'divide': # 首先需要用cloudCopmare根据预处理后的稀疏点云分割，得到scale
         #     # grid_dim = torch.tensor([])
         #     pass
@@ -92,16 +94,17 @@ class ColmapDataset(BaseDataset,divideTool):
         #     # draw_poses(pts3d=pts3d)
         self.rays = []
         if self.split == 'train':
-            self.load_centers()#得到centers和scale
-            self.load_mask()
+            self.load_centers()#从txt得到centers和scale
+            self.load_mask()#从mask dir获得mask名字
+            self.scale_to(scale=self.config.scale_to)
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.poses = [self.poses[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.poses = torch.stack(self.poses)
         if self.split == 'test':
             self.load_centers()
-            
             self.load_mask()
+            self.scale_to(scale=self.config.scale_to)
             del self.poses
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
             # # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8==0]
