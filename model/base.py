@@ -44,7 +44,7 @@ class baseModule(nn.Module):
         self.center = center
         self.scale = scale
         
-        self.C = max(1+int(np.ceil(np.log2(2*self.scale))), 1)
+        self.C = max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
         self.H = self.config.grid_resolution
         
         self.geometry_network.setup(center,scale)
@@ -69,9 +69,9 @@ class baseModule(nn.Module):
                 self.register_buffer('density_bitfield',
                     torch.zeros(self.C*self.H**3//8, dtype=torch.uint8))
                 self.register_buffer('grid_coords',
-                    create_meshgrid3d(self.G, self.G, self.G, False, dtype=torch.int32).reshape(-1, 3))
+                    create_meshgrid3d(self.H, self.H, self.H, False, dtype=torch.int32).reshape(-1, 3))
                 self.register_buffer('density_grid',
-                    torch.zeros(self.C, self.G**3))
+                    torch.zeros(self.C, self.H**3))
                  
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
         raise NotImplementedError
@@ -98,7 +98,9 @@ class baseModule(nn.Module):
     def render(self,rays_o,rays_d,bg_color=None,perturb=False,cam_near_far=None,shading='full'):
         rays_o=rays_o.contiguous()
         rays_d=rays_d.contiguous()
-        
+        rays_o[...,3] -= self.center.view(-1,3)#需要平移到以center为原点坐标系
+        draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb[None,...])
+            
         N=rays_o.shape[0]
         nears,fars = near_far_from_aabb(
             rays_o,rays_d,self.scene_aabb,min_near=0.2

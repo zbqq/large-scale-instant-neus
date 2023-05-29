@@ -145,7 +145,7 @@ class divideTool():
         self.centers *= factor
         self.poses[...,3] *= factor
         self.scales *= factor
-        self.poses[...,3] -= self.centers[current_model_idx].view(-1,3)
+        # self.poses[...,3] -= self.centers[current_model_idx].view(-1,3)
         
         
         
