@@ -1,8 +1,9 @@
 # ninja log v5
-0	20954	1685283770355561926	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
-1	37110	1685283786511838728	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
-0	39067	1685283788467872226	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o	ca7cc3cb3a2d8621
-2	22320	1685360065048932890	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
-2	34710	1685360077445134823	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
-2	21158	1685364057222328093	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
-2	35086	1685364071154560019	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
+0	22093	1685368835580711128	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
+0	39077	1685368852564992823	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o	ca7cc3cb3a2d8621
+2	36044	1685368955230693984	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
+2	34865	1685423396416162674	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
+2	37579	1685423539462436416	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
+2	40763	1685436413265983660	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o	ca7cc3cb3a2d8621
+2	23026	1685444833860261364	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
+3	34555	1685444845396443298	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o	ca7cc3cb3a2d8621

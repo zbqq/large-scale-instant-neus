@@ -33,6 +33,7 @@ class NeRFSystem(BaseSystem):
             dirs = batch['directions']
             # dirs = self.directions
             rays_o, rays_d = get_rays(dirs,poses)
+            # print(batch['pose_idx'])
             del dirs,poses
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
             # draw_poses(poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh,pts3d=self.train_dataset.pts3d)

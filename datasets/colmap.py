@@ -106,8 +106,10 @@ class ColmapDataset(BaseDataset,divideTool):
             self.load_mask()
             self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
             del self.poses
+
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
             # # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8==0]
             # self.poses = [self.poses[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8==0]
             # self.poses = torch.stack(self.poses)
+            
         pass

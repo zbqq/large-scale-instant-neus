@@ -32,10 +32,10 @@ class divideTool():
         self.centers_and_scales_path = os.path.join(self.config.root_dir,'CaS.txt')#输出的
         self.mask_save_path = os.path.join(self.config.mask_dir,"model")
         self.model_num = self.config.grid_X * self.config.grid_Y
-        if torch.cuda.is_available():
-            self.device = torch.device("cuda:0")  
-        else:
-            raise RuntimeError("divide tool must use GPU!")
+        # if torch.cuda.is_available():
+        #     self.device = torch.device("cuda:1")  
+        # else:
+        #     raise RuntimeError("divide tool must use GPU!")
         if self.model_num > 1:
             for i in range(0,self.model_num):
                 #存放每一个model对poses的需求索引，以及poses对该model的intersect_pix_idx
@@ -94,35 +94,64 @@ class divideTool():
         self.centers = temp[...,:3].view(-1,3)
         self.scales = temp[...,3:].view(-1,3)+torch.tensor([4,4,3]).view(1,3)
     
-    def divide(self,grid_dim):#从已经得到的sparse pts进行区域的分割，
+    def divide(self,grid_dim,mask_type='aabb_intersect'):#从已经得到的sparse pts进行区域的分割，
         """
             
         """
-        self.gen_centers_from_pts(grid_dim)
-
+        self.gen_centers_from_pts(grid_dim)#存真实的scale
+        self.load_centers()#读取
+        self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
+        #放缩到2,4,8,...
+        
         bits_array_len = math.floor(self.img_wh[0]*self.img_wh[1]/32)
-        for i in range(self.config.model_start_num,len(self.grids)):
-            grid = self.grids[i]
-            for j in tqdm(range(0,self.poses.shape[0])):
-                rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[j])
+        
+        if mask_type == 'mega_nerf_mask':
+            for i in tqdm(range(0,self.poses.shape[0])):
+                rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[i])
                 rays_o = rays_o.to(self.device)
                 rays_d = rays_d.to(self.device)
-                aabb = grid._roi_aabb.to(self.device)
-                t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
-                # intersect_pix_idx = torch.where(t_min<100)[0]#存放
-                intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
-                bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
-                studio.packbits_u32(intersect_pix_idx,bits_array)
-                bits_array = bits_array.to('cpu')
-                # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
-                if (t_min<100).sum() > 4000:
+                mask = torch.zeros([rays_o.shape[0],self.centers.shape[0]],device=self.device).to(torch.int32)
+                t_range = torch.tensor([0.,5.]).repeat([rays_o.shape[0],1]).to(self.device)
+                studio.mega_nerf_mask(rays_d,rays_o[0],self.centers.to(self.device),t_range,mask,int(1024),1.2)
+                torch.cuda.empty_cache()
+                for j in range(0,self.centers.shape[0]):
+                    
+                    bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
 
+                    studio.packbits_u32(mask[:,j],bits_array)
+                    bits_array = bits_array.to('cpu')
+                    if (mask > 0).sum() > 4000:
+                        torch.save({
+                                    "bits_array":bits_array,
+                                    "pose_idx":i,
+                                    "rays_nums":mask[:,j].sum()
+                                },os.path.join(self.mask_save_path,"{}".format(j),'metadata_{}.pt'.format(i)))  
+                
+                
+        if mask_type=='aabb_intersect':
+            for i in range(self.config.model_start_num,len(self.grids)):
+                grid = self.grids[i]
+                for j in tqdm(range(0,self.poses.shape[0])):
+                    rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[j])
+                    rays_o = rays_o.to(self.device)
+                    rays_d = rays_d.to(self.device)
+                    aabb = grid._roi_aabb.to(self.device)
+                    t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
+
+                    # intersect_pix_idx = torch.where(t_min<100)[0]#存放
+                    intersect_pix_idx = (t_min < 100).to(torch.int32).to(self.device) # [w*h, ],dtype = bool
+                    bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
+                    studio.packbits_u32(intersect_pix_idx,bits_array)
+                    bits_array = bits_array.to('cpu')
                     # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
-                    torch.save({
-                        "bits_array":bits_array,
-                        "pose_idx":j,
-                        "rays_nums":intersect_pix_idx.sum()
-                    },os.path.join(self.mask_save_path,"{}".format(i),'metadata_{}.pt'.format(j)))  
+                    if (t_min<100).sum() > 4000:
+
+                        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs,aabb_idx = 10,img_wh=self.img_wh)
+                        torch.save({
+                            "bits_array":bits_array,
+                            "pose_idx":j,
+                            "rays_nums":intersect_pix_idx.sum()
+                        },os.path.join(self.mask_save_path,"{}".format(i),'metadata_{}.pt'.format(j)))  
     def get_R_correct(self):
         with open(self.Rc_path,'r') as f:
             lines = f.readlines()
@@ -146,6 +175,7 @@ class divideTool():
         self.centers *= factor
         self.poses[...,3] *= factor
         self.scales *= factor
+        # self.aabbs *= factor
         # self.poses[...,3] -= self.centers[current_model_idx].view(-1,3)
         
         

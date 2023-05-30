@@ -118,7 +118,7 @@ class vanillaNeRF(baseModule):
 
             return result
         else:  
-            result = self.render(rays_o,rays_d)
+            result = self.render(rays_o,rays_d,split=split)
             return result
             
             

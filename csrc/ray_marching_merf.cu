@@ -360,8 +360,8 @@ __global__ void kernel_march_rays_train(
 
     // printf("far \n%f",far);
     const float bound_max = fmaxf(fmaxf(bound3.x,bound3.y),bound3.z);
-    const float dt_min = 2 * SQRT3() / max_steps;
-    const float dt_max = 2 * SQRT3() * bound_max  / H;
+    const float dt_min = 2 * SQRT3() * bound_max / max_steps;
+    const float dt_max = 2 * SQRT3() * bound_max / H;
     // const float dt_max = 1e10f;
     
     float t0 = near;
@@ -717,7 +717,8 @@ __global__ void kernel_march_rays(
     const scalar_t* __restrict__ rays_t, 
     const scalar_t* __restrict__ rays_o, 
     const scalar_t* __restrict__ rays_d, 
-    const float bound, const bool contract,
+    const scalar_t* __restrict__ bound, 
+    const bool contract,
     const float dt_gamma, const uint32_t max_steps,
     const uint32_t C, const uint32_t H,
     const uint8_t * __restrict__ grid,
@@ -738,7 +739,8 @@ __global__ void kernel_march_rays(
     xyzs += n * n_step * 3;
     dirs += n * n_step * 3;
     ts += n * n_step * 2;
-    
+    float3 bound3 = make_float3(bound[0],bound[1],bound[2]);
+
     const float ox = rays_o[0], oy = rays_o[1], oz = rays_o[2];
     const float dx = rays_d[0], dy = rays_d[1], dz = rays_d[2];
     const float rdx = 1 / (dx + 1e-10f), rdy = 1 / (dy + 1e-10f), rdz = 1 / (dz + 1e-10f);
@@ -747,8 +749,9 @@ __global__ void kernel_march_rays(
     
     const float near = nears[index], far = fars[index];
 
-    const float dt_min = 2 * SQRT3() / max_steps;
-    const float dt_max = 2 * SQRT3() * bound / H;
+    const float bound_max = fmaxf(fmaxf(bound3.x,bound3.y),bound3.z);
+    const float dt_min = 2 * SQRT3() * bound_max / max_steps;
+    const float dt_max = 2 * SQRT3() * bound_max / H;
     // const float dt_max = 1e10f;
 
     // march for n_step steps, record points
@@ -758,29 +761,47 @@ __global__ void kernel_march_rays(
 
     while (t < far && step < n_step) {
         // current point
-        const float x = clamp(ox + t * dx, -bound, bound);
-        const float y = clamp(oy + t * dy, -bound, bound);
-        const float z = clamp(oz + t * dz, -bound, bound);
+        const float x = clamp(ox + t * dx, -bound3.x, bound3.x);
+        const float y = clamp(oy + t * dy, -bound3.x, bound3.y);
+        const float z = clamp(oz + t * dz, -bound3.z, bound3.z);
 
         float dt = clamp(t * dt_gamma, dt_min, dt_max);
 
         // get mip level
         const int level = max(mip_from_pos(x, y, z, C), mip_from_dt(dt, H, C)); // range in [0, C - 1]
-
-        const float mip_bound = fminf(scalbnf(1, level), bound);
+        
+        const float mip_bound = fminf(scalbnf(1.0f, level), bound_max);
+        // const float mip_bound = fminf(scalbnf(1, level), bound);
         const float mip_rbound = 1 / mip_bound;
         
         // contraction
+        // float cx = x, cy = y, cz = z;
+        // const float mag = fmaxf(fabsf(x), fmaxf(fabsf(y), fabsf(z)));
+        // if (contract && mag > 1) {
+        //     // L-INF norm
+        //     const float Linf_scale = (2 - 1 / mag) / mag;
+        //     cx *= Linf_scale;
+        //     cy *= Linf_scale;
+        //     cz *= Linf_scale;
+        // }
+
+        // contraction
         float cx = x, cy = y, cz = z;
-        const float mag = fmaxf(fabsf(x), fmaxf(fabsf(y), fabsf(z)));
-        if (contract && mag > 1) {
+        const float absx = fabsf(x),absy = fabsf(y),absz = fabsf(z);
+        const float mag = fmaxf(absx,fmaxf(absy,absz));
+
+        if (contract && mag > bound_max/2) {
             // L-INF norm
-            const float Linf_scale = (2 - 1 / mag) / mag;
-            cx *= Linf_scale;
-            cy *= Linf_scale;
-            cz *= Linf_scale;
+
+            const float Linf_x_scale = (bound3.x - bound3.x/2 / mag) / mag;
+            const float Linf_y_scale = (bound3.y - bound3.y/2 / mag) / mag;
+            const float Linf_z_scale = (bound3.z - bound3.z/2 / mag) / mag;
+
+            cx *= Linf_x_scale;
+            cy *= Linf_y_scale;
+            cz *= Linf_z_scale;
         }
-        
+
         // convert to nearest grid position
         const int nx = clamp(0.5 * (cx * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
         const int ny = clamp(0.5 * (cy * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
@@ -828,12 +849,12 @@ __global__ void kernel_march_rays(
 }
 
 
-void march_rays(const uint32_t n_alive, const uint32_t n_step, const at::Tensor rays_alive, const at::Tensor rays_t, const at::Tensor rays_o, const at::Tensor rays_d, const float bound, const bool contract, const float dt_gamma, const uint32_t max_steps, const uint32_t C, const uint32_t H, const at::Tensor grid, const at::Tensor near, const at::Tensor far, at::Tensor xyzs, at::Tensor dirs, at::Tensor ts, at::Tensor noises) {
+void march_rays(const uint32_t n_alive, const uint32_t n_step, const at::Tensor rays_alive, const at::Tensor rays_t, const at::Tensor rays_o, const at::Tensor rays_d, const at::Tensor bound, const bool contract, const float dt_gamma, const uint32_t max_steps, const uint32_t C, const uint32_t H, const at::Tensor grid, const at::Tensor near, const at::Tensor far, at::Tensor xyzs, at::Tensor dirs, at::Tensor ts, at::Tensor noises) {
     static constexpr uint32_t N_THREAD = 128;
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(
     rays_o.scalar_type(), "march_rays", ([&] {
-        kernel_march_rays<<<div_round_up(n_alive, N_THREAD), N_THREAD>>>(n_alive, n_step, rays_alive.data_ptr<int>(), rays_t.data_ptr<scalar_t>(), rays_o.data_ptr<scalar_t>(), rays_d.data_ptr<scalar_t>(), bound, contract, dt_gamma, max_steps, C, H, grid.data_ptr<uint8_t>(), near.data_ptr<scalar_t>(), far.data_ptr<scalar_t>(), xyzs.data_ptr<scalar_t>(), dirs.data_ptr<scalar_t>(), ts.data_ptr<scalar_t>(), noises.data_ptr<scalar_t>());
+        kernel_march_rays<<<div_round_up(n_alive, N_THREAD), N_THREAD>>>(n_alive, n_step, rays_alive.data_ptr<int>(), rays_t.data_ptr<scalar_t>(), rays_o.data_ptr<scalar_t>(), rays_d.data_ptr<scalar_t>(), bound.data_ptr<scalar_t>(), contract, dt_gamma, max_steps, C, H, grid.data_ptr<uint8_t>(), near.data_ptr<scalar_t>(), far.data_ptr<scalar_t>(), xyzs.data_ptr<scalar_t>(), dirs.data_ptr<scalar_t>(), ts.data_ptr<scalar_t>(), noises.data_ptr<scalar_t>());
     }));
 }
 

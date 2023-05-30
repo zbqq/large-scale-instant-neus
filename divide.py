@@ -4,6 +4,9 @@ from utils.config_util import load_config
 import numpy as np
 import argparse
 from datasets.colmap import ColmapDataset
+
+import os
+# os.environ['CUDA_VISIBLE_DEVICES']='1'
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf_path',default='./config/neus-colmap.yaml')
@@ -16,8 +19,8 @@ if __name__ == '__main__':
     grid_dim = torch.tensor([config.dataset.grid_X,
                              config.dataset.grid_Y,
                              1])
-    
-    dataset.divide(grid_dim)
+    dataset.device = torch.device("cuda:0")
+    dataset.divide(grid_dim,mask_type='mega_nerf_mask')
     
     # with open(config.dataset.root_dir+'/R_correct.txt','r') as f:
     #     lines = f.readlines()

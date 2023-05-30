@@ -50,6 +50,7 @@ class NeRFLoss(nn.Module):
         d['rgb'] = (results['rgb']-target['rays'])**2 * self.config.lambda_rgb
         # d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays'].to(self.device))#训练的epoch小的话很不好
         o = results['opacity']+1e-10
+        # o = results['opacity'][results['rays_valid']]+1e-10
         # encourage opacity to be either 0 or 1 to avoid floater
         d['opacity'] = self.lambda_opacity*(-o*torch.log(o))*self.config.lambda_opacity
         # d['eikonal']=((torch.linalg.norm(results['gradients'], ord=2, dim=-1) - 1.)**2).mean()*self.config.lambda_eikonal

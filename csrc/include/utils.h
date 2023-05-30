@@ -9,10 +9,6 @@
 
 //packbits_32
 
-torch::Tensor packbits_u32(torch::Tensor idx_array, torch::Tensor bits_array);
-
-torch::Tensor un_packbits_u32(torch::Tensor idx_array, torch::Tensor bits_array);
-
 torch::Tensor packbits_u32(
     torch::Tensor idx_array,
     torch::Tensor bits_array
@@ -30,11 +26,12 @@ torch::Tensor distance_mask(
     torch::Tensor mask,//[WxH , C]
     const float threshould//重叠阈值
 );
-torch::Tensor mega_nerf_mask(
+void mega_nerf_mask(
     torch::Tensor dirsMap,//[WxH , 3]
     torch::Tensor locMap,//[WxH , 3]
     torch::Tensor centroids,//[C , 3]
     torch::Tensor t_range,
+    torch::Tensor mask,
     const int samples,//每条射线上采样点数
     const float threshould//重叠阈值
 );
@@ -106,7 +103,7 @@ void march_rays(
     const at::Tensor rays_alive, 
     const at::Tensor rays_t, 
     const at::Tensor rays_o, const at::Tensor rays_d, 
-    const float bound, const bool contract, 
+    const at::Tensor bound, const bool contract, 
     const float dt_gamma, const uint32_t max_steps, 
     const uint32_t C, const uint32_t H, const at::Tensor grid, 
     const at::Tensor nears, const at::Tensor fars, 

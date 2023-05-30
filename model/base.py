@@ -16,7 +16,7 @@ from omegaconf import OmegaConf
 from kornia.utils.grid import create_meshgrid3d
 from torch.cuda.amp import custom_fwd, custom_bwd
 from .custom_functions import \
-    march_rays_train, near_far_from_aabb, composite_rays_train, morton3D, morton3D_invert, packbits
+    march_rays_train, near_far_from_aabb, composite_rays_train, morton3D, morton3D_invert, packbits,march_rays,composite_rays
 # import .custom_functions
 import torch
 from torch import nn
@@ -38,7 +38,7 @@ class baseModule(nn.Module):
         # L = 16; F = 2; log2_T = 19; N_min = 16
         # b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
         # self.render_step_size = 1.732 * 2 * self.config.radius_z / self.config.num_samples_per_ray
-        
+        self.iter_density=0
         self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
     
     def setup(self,center,scale):
@@ -86,7 +86,7 @@ class baseModule(nn.Module):
         pbar=tqdm.tqdm(total=len(rays_o))
         t1 = time.time()
         for rays_o_batch, rays_d_batch in zip(rays_o, rays_d):
-            out = self(rays_o_batch,rays_d_batch)
+            out = self(rays_o_batch,rays_d_batch,split='val')
             final_out.append(out["rgb"])
             depths.append(out["depth"])
             pbar.update(1)
@@ -99,15 +99,16 @@ class baseModule(nn.Module):
             "depth": depths
         }
         
-    def render(self,rays_o,rays_d,bg_color=None,perturb=False,cam_near_far=None,shading='full'):
+    def render(self,rays_o,rays_d,bg_color=None,perturb=False,cam_near_far=None,shading='full',split='train'):
         rays_o=rays_o.contiguous()
         rays_d=rays_d.contiguous()
         rays_o-= self.center.view(-1,3)#需要平移到以center为原点坐标系
         scene_aabb =self.scene_aabb - self.center.repeat([2])
-            
+        device = rays_o.device
+        
         N=rays_o.shape[0]
         nears,fars = near_far_from_aabb(
-            rays_o,rays_d,scene_aabb,0.2
+            rays_o,rays_d,scene_aabb,0.02
         )
         
         
@@ -119,8 +120,8 @@ class baseModule(nn.Module):
         if bg_color is None:
             bg_color = 1
         
-
-        if self.training:
+        results={}
+        if split=='train' or split == 'val':
             # with torch.no_grad():
             xyzs, dirs, ts, rays = \
                 march_rays_train(rays_o, rays_d, self.scale, 
@@ -135,9 +136,9 @@ class baseModule(nn.Module):
             xyzs += self.center.view(-1,3)
             dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
             with torch.cuda.amp.autocast(enabled=self.config.fp16):
-                geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=True)
-                sigmas,feas,normals = geo_output['sigma'],geo_output['fea'],geo_output["grad"]
-                rgbs = self.color_net(dirs,feas,normals)
+                geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
+                sigmas,feas = geo_output['sigma'],geo_output['fea']
+                rgbs = self.color_net(dirs,feas)
                 # outputs = self(xyzs, dirs, shading=shading)
                 # sigmas = outputs['sigma']
                 # rgbs = outputs['color']
@@ -147,16 +148,55 @@ class baseModule(nn.Module):
             results = {
                 'num_points':xyzs.shape[0],
                 'weights':weights,
-                'weights_sum':weights_sum,
-                
+                # 'rays_valid':weights_sum>0,
+                'opacity':torch.clamp(weights_sum,1e-12,1000),
+                'num_points':xyzs.shape[0]
             }
-            opacity = torch.clamp(weights_sum,1e-12,1000)
-            results['num_points'] = xyzs.shape[0]
-            results['weights'] = weights
-            results['opacity'] = opacity
+            # opacity = torch.clamp(weights_sum,1e-12,1000)
             
-        else:
+            
+        elif split=='hhh':
             pass
+            dtype = torch.float32
+            weights_sum = torch.zeros(N, dtype=dtype, device=device)
+            depth = torch.zeros(N, dtype=dtype, device=device)
+            image = torch.zeros(N, 3, dtype=dtype, device=device)
+            
+            n_alive = N
+            rays_alive = torch.arange(n_alive, dtype=torch.int32, device=device) # [N]
+            rays_t = nears.clone() # [N]
+
+            step = 0
+        
+            while step < 1024:
+                # count alive rays 
+                n_alive = rays_alive.shape[0]
+                
+                # exit loop
+                if n_alive <= 0:
+                    break
+
+                # decide compact_steps
+                n_step = max(min(N // n_alive, 8), 1)
+
+                xyzs, dirs, ts = march_rays(n_alive, n_step, rays_alive, rays_t, rays_o, rays_d, self.scale, True, self.density_bitfield, self.C, self.H, nears, fars, perturb if step == 0 else False, self.config.dt_gamma, self.config.num_samples_per_ray)
+                
+                dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
+                with torch.cuda.amp.autocast(enabled=self.config.fp16):
+                    # outputs = self(xyzs, dirs, shading=shading)
+                    # sigmas = outputs['sigma']
+                    # rgbs = outputs['color']
+                    geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
+                    sigmas,feas = geo_output['sigma'],geo_output['fea']
+                    rgbs = self.color_net(dirs,feas)
+                    
+                composite_rays(n_alive, n_step, rays_alive, rays_t, sigmas, rgbs, ts, weights_sum, depth, image, self.config.T_thresh)
+
+                rays_alive = rays_alive[rays_alive >= 0]
+
+                # print(f'step = {step}, n_step = {n_step}, n_alive = {n_alive}, xyzs: {xyzs.shape}')
+
+                step += n_step
         
         results['depth']=depth
         results['rgb']=image
@@ -191,35 +231,37 @@ class baseModule(nn.Module):
                                 # add noise in [-hgs, hgs]
                                 cas_xyzs += (torch.rand_like(cas_xyzs) * 2 - 1) * half_grid_size
                                 # query density
-                                with torch.cuda.amp.autocast(enabled=self.opt.fp16):
+                                with torch.cuda.amp.autocast(enabled=self.config.fp16):
                                     geo_output = self.geometry_network(cas_xyzs,with_fea=False,with_grad=False)
                                     sigmas = geo_output['sigma'].reshape(-1).detach()
                                 # assign 
-                                tmp_grid[cas, indices] = sigmas
+                                tmp_grid[cas, indices] = sigmas.to(torch.float32)
 
             # partial update (half the computation)
             else:
                 N = self.H ** 3 // 4 # H * H * H / 4
                 for cas in range(self.C):
                     # random sample some positions
-                    coords = torch.randint(0, self.H, (N, 3), device=self.aabb_train.device) # [N, 3], in [0, 128)
+                    coords = torch.randint(0, self.H, (N, 3), device=self.scene_aabb.device) # [N, 3], in [0, 128)
                     indices = morton3D(coords).long() # [N]
                     # random sample occupied positions
                     occ_indices = torch.nonzero(self.density_grid[cas] > 0).squeeze(-1) # [Nz]
-                    rand_mask = torch.randint(0, occ_indices.shape[0], [N], dtype=torch.long, device=self.aabb_train.device)
+                    rand_mask = torch.randint(0, occ_indices.shape[0], [N], dtype=torch.long, device=self.scene_aabb.device)
                     occ_indices = occ_indices[rand_mask] # [Nz] --> [N], allow for duplication
                     occ_coords = morton3D_invert(occ_indices) # [N, 3]
                     # concat
                     indices = torch.cat([indices, occ_indices], dim=0)
                     coords = torch.cat([coords, occ_coords], dim=0)
                     # same below
-                    xyzs = 2 * coords.float() / (self.grid_size - 1) - 1 # [N, 3] in [-1, 1]
-                    bound = min(2 ** cas, self.bound)
-                    half_grid_size = bound / self.grid_size
+                    xyzs = 2 * coords.float() / (self.H - 1) - 1 # [N, 3] in [-1, 1]
+                    # bound = min(2 ** cas, max(self.scale))
+                    bound = torch.min(torch.ones_like(self.scale)*2 ** cas, self.scale)
+                    half_grid_size = bound / self.H
                     # scale to current cascade's resolution
-                    cas_xyzs = xyzs * (bound - half_grid_size) + self.center.view(-1,3)
+                    cas_xyzs = xyzs * (bound - half_grid_size).view(-1,3) + self.center.view(-1,3)
                     # cas_xyzs = xyzs * (bound - half_grid_size) 
                     # add noise in [-hgs, hgs]
+                    draw_poses(pts3d=cas_xyzs.to('cpu'),aabb_=self.scene_aabb[None,...])
                     cas_xyzs += (torch.rand_like(cas_xyzs) * 2 - 1) * half_grid_size
                     # query density
                     with torch.cuda.amp.autocast(enabled=self.config.fp16):
@@ -227,7 +269,7 @@ class baseModule(nn.Module):
                         geo_output = self.geometry_network(cas_xyzs,with_fea=False,with_grad=False)
                         sigmas = geo_output['sigma'].reshape(-1).detach()
                     # assign 
-                    tmp_grid[cas, indices] = sigmas
+                    tmp_grid[cas, indices] = sigmas.to(torch.float32)
 
             # ema update
             valid_mask = (self.density_grid >= 0) & (tmp_grid >= 0)

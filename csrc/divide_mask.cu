@@ -227,12 +227,12 @@ __global__ void mega_nerf_mask_kernel(
     }
 }
 
-
-torch::Tensor mega_nerf_mask(
+void mega_nerf_mask(
     torch::Tensor dirsMap,//[WxH , 3]
     torch::Tensor locMap,//[WxH , 3]
     torch::Tensor centroids,//[C , 3]
     torch::Tensor t_range,
+    torch::Tensor mask,//[N,C]
     const int samples,//每条射线上采样点数
     const float threshould//重叠阈值
 ){
@@ -241,8 +241,8 @@ torch::Tensor mega_nerf_mask(
     const int BLOCK_H = 16;
     const dim3 blockSize(BLOCK_W,BLOCK_H,1);
     const dim3 gridSize((dirsMap.size(0) + BLOCK_W*BLOCK_H - 1)/(BLOCK_W*BLOCK_H),1,1);
-    auto mask = torch::zeros({dirsMap.size(0),centroids.size(0)}, 
-                                        torch::dtype(torch::kInt32).device(dirsMap.device()));
+    // auto mask = torch::zeros({dirsMap.size(0),centroids.size(0)}, 
+    //                                     torch::dtype(torch::kInt32).device(dirsMap.device()));
     AT_DISPATCH_ALL_TYPES(dirsMap.type(),"mega_nerf_mask",
     ([&] {
         mega_nerf_mask_kernel<<<gridSize, blockSize>>>(
@@ -255,5 +255,4 @@ torch::Tensor mega_nerf_mask(
             threshould
         );
     }));
-    return mask;
 }

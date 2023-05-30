@@ -190,7 +190,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
         self.model = MODELS[self.config.model.name](self.config.model)
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
-                         self.train_dataset.scales[self.current_model_num,:])
+                         self.train_dataset.scales[self.current_model_num,:]*1.5)
         
         self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         
