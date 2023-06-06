@@ -12,16 +12,21 @@ root_dir: /data3/zzy/data_lab/${case_name}
 log_dir: ${root_dir}/logs
 grid_X: 4
 grid_Y: 4
+# mask_dir: ${root_dir}/ray_distance_mask/${grid_X}x${grid_Y}
 mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
+# mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 4 # 开始从第几个模型训练
-validate_freq: 300
-is_continue: false
+model_start_num: 11 # 开始从第几个模型训练
+validate_freq: 1
+val_mesh_freq: 1
+val_ckpt_freq: 600
+
+is_continue: true
 use_DDP: false
 dataset:
-  downsample: 0.4 #训练集的图像降采样率
-  scale_to: 4 #scale放缩至该绝对尺度
+  downsample: 0.7 #训练集的图像降采样率
+  scale_to: 8 #scale放缩至该绝对尺度
   use_random: true
   name: colmap
   root_dir: ${root_dir}
@@ -31,6 +36,7 @@ dataset:
   # batch_size: 3248
   # batch_size: 4096
   batch_size: 8192
+  # batch_size: 16384
   split_num: 1500
   model_start_num: ${model_start_num}
   mask_dir: ${mask_dir}
@@ -44,7 +50,7 @@ model:
     use_custom_radius: false
   grid_update_freq: 100
   grid_resolution: 256 # 128
-  num_samples_per_ray: 512 # 512
+  num_samples_per_ray: 876 # 512
   grid_prune: true
   use_nerfacc: false
   dynamic_ray_sampling: true
@@ -55,6 +61,7 @@ model:
   fp16: true
   T_thresh: 2e-4
   density_thresh: 10.
+  scale_zoom_up: 1.2 #放大一个块的尺度以实现重叠
   geometry_network:
     feature_dim: 13
     sdf_activation: none
@@ -62,20 +69,20 @@ model:
     grad_type: analytic
     isosurface:
       method: mc
-      resolution: 512
+      resolution: 400
       chunk: 2097152
-      threshold: 0.
+      threshold: 2.5
     xyz_encoding_config:
       otype: Grid
       type: Hash
       n_levels: 16
       n_features_per_level: 2
-      log2_hashmap_size: 20 # 大小只影响hash冲突
+      log2_hashmap_size: 21 # 大小只影响hash冲突
       base_resolution: 16
       
       # per_level_scale: 1.381912879967776 #N_max = 2048
-      per_level_scale: 1.447269237440378 #N_max = 4096
-      # per_level_scale: 1.515716566510398 #N_max = 8192
+      # per_level_scale: 1.447269237440378 #N_max = 4096
+      per_level_scale: 1.515716566510398 #N_max = 8192
       # per_level_scale: 1.5874010519681996 #N_max = 16384
       # per_level_scale: 1.6624757922855755 #N_max = 32768
       # per_level_scale: 1.7411011265922482 #N_max = 65536
@@ -109,7 +116,7 @@ system:
   name: nerf-system
   loss:
     lambda_rgb: 1.
-    lambda_opacity: 0.2
+    lambda_opacity: 0.3
     lambda_mask: 0.
   optimizer:
     # name: Adam
@@ -119,9 +126,9 @@ system:
       eps: 1.e-15
     params:
       geometry_network:
-          lr: 3.e-3
+          lr: 6.e-3
       color_net:
-          lr: 3.e-3
+          lr: 6.e-3
   scheduler:
     name: ExponentialLR
     interval: step
@@ -129,11 +136,9 @@ system:
       step_size: 80
       # gamma: 0.99
       # gamma: 1.01
-      gamma: 0.98
+      gamma: 0.99
+  save_ckpt_freq: 
 
-checkpoint:
-  save_top_k: -1
-  every_n_train_steps: ${trainer.max_steps}
 
 trainer:
   max_steps: 2000000

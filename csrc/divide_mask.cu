@@ -152,7 +152,7 @@ __global__ void distance_mask_kernel(
 }
 
 
-torch::Tensor distance_mask(
+void distance_mask(
     torch::Tensor dirsMap,//[WxH , 3]
     torch::Tensor locMap,//[WxH , 3]
     torch::Tensor centroids,//[C , 3]
@@ -174,10 +174,8 @@ torch::Tensor distance_mask(
             centroids.packed_accessor32<float,2,torch::RestrictPtrTraits>(),
             mask.packed_accessor32<int32_t,2,torch::RestrictPtrTraits>(),
             threshould
-
         );
     }));
-    return mask;
 }
 
 

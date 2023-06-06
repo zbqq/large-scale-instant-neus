@@ -79,7 +79,7 @@ def get_trueIdx(idx_array,batch_size):
     idx_array = idx_array.nonzero().view(-1)
     # print(idx_array.shape[0])
     batch_num = min(idx_array.shape[0],batch_size)
-    return idx_array[torch.randperm(idx_array.shape[0])[0:batch_num]]
+    return idx_array[torch.randperm(idx_array.shape[0])[0:batch_size]]
 
 def revise(poses,theta,pts3d=None,axis='y'):
         if axis == 'x':
@@ -177,20 +177,21 @@ class BaseDataset(IterableDataset):
             
             while True: # batch_num由__len__确定
                 item = torch.load(self.mask_name[self.idx_list[self.idx_tmp]])
-                idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32).to(self.device)
-                bits_array = item['bits_array'].to(self.device)
-                studio.un_packbits_u32(idx_array,bits_array)
-                idx_array = idx_array.to(torch.bool).to("cpu")
-                true_idx = get_trueIdx(idx_array,self.batch_size)
-                if true_idx.shape[0] < 4000:
-                    self.idx_tmp += 1
-                    del item,idx_array,bits_array
-                    continue
+                # idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32).to(self.device)
+                # bits_array = item['bits_array'].to(self.device)
+                # studio.un_packbits_u32(idx_array,bits_array)
+                # idx_array = idx_array.to(torch.bool).to("cpu")
+                # true_idx = get_trueIdx(idx_array,self.batch_size)
+                # if true_idx.shape[0] < 4000:
+                #     self.idx_tmp += 1
+                #     del item,idx_array,bits_array
+                #     continue
+                true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
                 dirs=self.directions[true_idx]
                 pose_idx = item['pose_idx']
                 img = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False)# w*h 3
                 rays = img[true_idx.to("cpu")]
-                del idx_array,true_idx
+                # del idx_array,true_idx
                 #加载一副图片的interset_pix_idxs            
                 yield {
                     "rays":rays,
@@ -213,7 +214,7 @@ class BaseDataset(IterableDataset):
                 }
                 self.idx_tmp += 1
                 self.idx_tmp %= len(self.idx_list)
-
+    
     
     
 class LoadPoseNeeded(IterableDataset):
@@ -227,7 +228,7 @@ class LoadPoseNeeded(IterableDataset):
         for name in self.load_name:
             Idx = torch.load(os.path.join(self.config.mask_dir),name)
             #加载一副图片的interset_pix_idxs            
-            yield Idx      
+            yield Idx
         
 if __name__ == "__main__":
     

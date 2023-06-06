@@ -19,7 +19,7 @@ torch::Tensor un_packbits_u32(
     torch::Tensor bits_array
 );
 
-torch::Tensor distance_mask(
+void distance_mask(
     torch::Tensor dirsMap,//[WxH , 3]
     torch::Tensor locMap,//[WxH , 3]
     torch::Tensor centroids,//[C , 3]

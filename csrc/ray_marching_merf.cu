@@ -376,6 +376,9 @@ __global__ void kernel_march_rays_train(
         const float x = clamp(ox + t * dx, -bound3.x, bound3.x);//bound default to 2
         const float y = clamp(oy + t * dy, -bound3.y, bound3.y);
         const float z = clamp(oz + t * dz, -bound3.z, bound3.z);
+        // const float x = ox + t * dx;
+        // const float y = oy + t * dy;
+        // const float z = oz + t * dz;
 
         float dt = clamp(t * dt_gamma, dt_min, dt_max);
 
@@ -390,12 +393,14 @@ __global__ void kernel_march_rays_train(
         const float absx = fabsf(x),absy = fabsf(y),absz = fabsf(z);
         const float mag = fmaxf(absx,fmaxf(absy,absz));
 
-        if (contract && mag > bound_max/2) {//对于扁平的grid，x,y的绝对值超过bound/2时，z会映射到大于1的值（因为linf_scale是一样的）
+        if (contract && mag > bound_max*0.9) {
+            //对于扁平的grid，x,y的绝对值超过bound/2时，z会映射到大于1的值（因为linf_scale是一样的）
+            //因此需要对每一个维度设置不同的bound
             // L-INF norm
 
-            const float Linf_x_scale = (bound3.x - bound3.x/2 / mag) / mag;
-            const float Linf_y_scale = (bound3.y - bound3.y/2 / mag) / mag;
-            const float Linf_z_scale = (bound3.z - bound3.z/2 / mag) / mag;
+            const float Linf_x_scale = (bound3.x - bound3.x*0.9 / mag) / mag;
+            const float Linf_y_scale = (bound3.y - bound3.y*0.9 / mag) / mag;
+            const float Linf_z_scale = (bound3.z - bound3.z*0.9 / mag) / mag;
 
             cx *= Linf_x_scale;
             cy *= Linf_y_scale;
@@ -790,12 +795,16 @@ __global__ void kernel_march_rays(
         const float absx = fabsf(x),absy = fabsf(y),absz = fabsf(z);
         const float mag = fmaxf(absx,fmaxf(absy,absz));
 
-        if (contract && mag > bound_max/2) {
+        if (contract && mag > bound_max*0.85) {
             // L-INF norm
 
-            const float Linf_x_scale = (bound3.x - bound3.x/2 / mag) / mag;
-            const float Linf_y_scale = (bound3.y - bound3.y/2 / mag) / mag;
-            const float Linf_z_scale = (bound3.z - bound3.z/2 / mag) / mag;
+            // const float Linf_x_scale = (bound3.x - bound3.x*0.8 / mag) / mag;
+            // const float Linf_y_scale = (bound3.y - bound3.y*0.8 / mag) / mag;
+            // const float Linf_z_scale = (bound3.z - bound3.z*0.8 / mag) / mag;
+
+            const float Linf_x_scale = (bound3.x - bound3.x*0.85 / mag) / mag;
+            const float Linf_y_scale = (bound3.y - bound3.y*0.85 / mag) / mag;
+            const float Linf_z_scale = (bound3.z - bound3.z*0.85 / mag) / mag;
 
             cx *= Linf_x_scale;
             cy *= Linf_y_scale;

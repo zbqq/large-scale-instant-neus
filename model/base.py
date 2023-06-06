@@ -44,8 +44,9 @@ class baseModule(nn.Module):
     def setup(self,center,scale):
         # self.center = center
         # self.scale = scale
+        
         self.register_buffer('center',center)
-        self.register_buffer('scale',scale)
+        self.register_buffer('scale',scale*self.config.scale_zoom_up)
         self.C = 1+max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
         self.H = self.config.grid_resolution
         
@@ -107,10 +108,17 @@ class baseModule(nn.Module):
         device = rays_o.device
         
         N=rays_o.shape[0]
+        # nears,fars = near_far_from_aabb(
+        #     rays_o,rays_d,scene_aabb,0.2
+        # )
+        aabb = scene_aabb.clone()
+        aabb[0:2] -= self.scale[:2]
+        aabb[3:5] += self.scale[:2]
+
         nears,fars = near_far_from_aabb(
-            rays_o,rays_d,scene_aabb,0.02
+            rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
         )
-        
+        # fars *= 1.1
         
         if cam_near_far is not None:
             nears = torch.maximum(nears, cam_near_far[:, 0])
@@ -122,6 +130,7 @@ class baseModule(nn.Module):
         
         results={}
         if split=='train' or split == 'val':
+        # if split=='train':
             # with torch.no_grad():
             xyzs, dirs, ts, rays = \
                 march_rays_train(rays_o, rays_d, self.scale, 
@@ -156,6 +165,7 @@ class baseModule(nn.Module):
             
             
         elif split=='hhh':
+        # elif split=='val':
             pass
             dtype = torch.float32
             weights_sum = torch.zeros(N, dtype=dtype, device=device)
@@ -168,7 +178,7 @@ class baseModule(nn.Module):
 
             step = 0
         
-            while step < 1024:
+            while step < 100:
                 # count alive rays 
                 n_alive = rays_alive.shape[0]
                 
@@ -201,7 +211,7 @@ class baseModule(nn.Module):
         results['depth']=depth
         results['rgb']=image
         return results
-    def update_extra_state(self, decay=0.95, S=128):
+    def update_extra_state(self, decay=0.95, S=128,occ_eval_fn=None):
         
         with torch.no_grad():
             tmp_grid = - torch.ones_like(self.density_grid)
@@ -224,7 +234,7 @@ class baseModule(nn.Module):
 
                             # cascading
                             for cas in range(self.C):
-                                bound = min(2 ** cas, max(self.scale))
+                                bound = torch.min(torch.ones_like(self.scale)*2 ** cas, self.scale).view(-1,3)
                                 half_grid_size = bound / self.H
                                 # scale to current cascade's resolution
                                 cas_xyzs = xyzs * (bound - half_grid_size) + self.center.view(-1,3)
@@ -232,8 +242,9 @@ class baseModule(nn.Module):
                                 cas_xyzs += (torch.rand_like(cas_xyzs) * 2 - 1) * half_grid_size
                                 # query density
                                 with torch.cuda.amp.autocast(enabled=self.config.fp16):
-                                    geo_output = self.geometry_network(cas_xyzs,with_fea=False,with_grad=False)
-                                    sigmas = geo_output['sigma'].reshape(-1).detach()
+                                    sigmas = occ_eval_fn(cas_xyzs)#[N]
+                                    # geo_output = self.geometry_network(cas_xyzs,with_fea=False,with_grad=False)
+                                    # sigmas = geo_output['sigma'].reshape(-1).detach()
                                 # assign 
                                 tmp_grid[cas, indices] = sigmas.to(torch.float32)
 
@@ -261,13 +272,11 @@ class baseModule(nn.Module):
                     cas_xyzs = xyzs * (bound - half_grid_size).view(-1,3) + self.center.view(-1,3)
                     # cas_xyzs = xyzs * (bound - half_grid_size) 
                     # add noise in [-hgs, hgs]
-                    draw_poses(pts3d=cas_xyzs.to('cpu'),aabb_=self.scene_aabb[None,...])
+                    # draw_poses(pts3d=cas_xyzs.to('cpu'),aabb_=self.scene_aabb[None,...])
                     cas_xyzs += (torch.rand_like(cas_xyzs) * 2 - 1) * half_grid_size
                     # query density
                     with torch.cuda.amp.autocast(enabled=self.config.fp16):
-                        # sigmas = self.density(cas_xyzs)['sigma'].reshape(-1).detach()
-                        geo_output = self.geometry_network(cas_xyzs,with_fea=False,with_grad=False)
-                        sigmas = geo_output['sigma'].reshape(-1).detach()
+                        sigmas = occ_eval_fn(cas_xyzs)#[N]
                     # assign 
                     tmp_grid[cas, indices] = sigmas.to(torch.float32)
 
@@ -286,7 +295,7 @@ class baseModule(nn.Module):
 
         # print(f'[density grid] min={self.density_grid.min().item():.4f}, max={self.density_grid.max().item():.4f}, mean={self.mean_density:.4f}, occ_rate={(self.density_grid > density_thresh).sum() / (128**3 * self.cascade):.3f}')
         return None
-        
+
         
         
         

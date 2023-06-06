@@ -22,9 +22,9 @@ class vanillaNeRF(baseModule):
         def occ_eval_fn(x):
             sigma = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
             sigma = torch.sigmoid(sigma)[...,None]
-            return sigma
+            return sigma.reshape(-1).detach()
         
-        self.update_extra_state()
+        self.update_extra_state(occ_eval_fn = lambda pts: occ_eval_fn(x=pts))
         # self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.98)
         
     def get_alpha(self, sigma, dists):#计算

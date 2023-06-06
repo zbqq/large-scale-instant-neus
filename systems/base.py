@@ -6,6 +6,9 @@ from utils.utils import load_ckpt_path
 import numpy as np
 import cv2
 import os
+import mcubes
+import trimesh
+from skimage.metrics import peak_signal_noise_ratio as psnr
 
 from datasets.colmap import ColmapDataset
 from model.loss import NeRFLoss
@@ -18,7 +21,7 @@ from matplotlib import cm
 
 from torch.utils.data import DataLoader
 
-
+from model.val_utils import extract_geometry
 DATASETS={
     'colmap':ColmapDataset
 }
@@ -170,12 +173,23 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.model_num = self.config.dataset.grid_X * self.config.dataset.grid_Y
         if self.model_num> 1:
             for i in range(0,self.model_num):
-                os.makedirs(os.path.join(self.config.save_dir,'{}'.format(i),'{}'.format(self.config.model.name)),exist_ok=True)
+                prefix = os.path.join(self.config.save_dir,'{}'.format(i),'{}'.format(self.config.model.name))
+                os.makedirs(prefix,exist_ok=True)
+                os.makedirs(prefix+"/ckpts",exist_ok=True)
+                os.makedirs(prefix+"/meshes",exist_ok=True)
+                os.makedirs(prefix+"/images",exist_ok=True)
+                
                 # 先实例化不setup不用占多少显存
             pass
         else:
             os.makedirs(os.path.join(self.config.save_dir,'0','{}'.format(self.config.model.name)),exist_ok=True)
-
+            prefix = os.path.join(self.config.save_dir,'0','{}'.format(self.config.model.name))
+            os.makedirs(prefix,exist_ok=True)
+            os.makedirs(prefix+"/ckpts",exist_ok=True)
+            os.makedirs(prefix+"meshes",exist_ok=True)
+            os.makedirs(prefix+"images",exist_ok=True)
+            
+        
         self.current_model_num = self.config.model_start_num # 训练到的第几个模型
         self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
         
@@ -190,7 +204,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
         self.model = MODELS[self.config.model.name](self.config.model)
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
-                         self.train_dataset.scales[self.current_model_num,:]*1.5)
+                         self.train_dataset.scales[self.current_model_num,:])
         
         self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         
@@ -198,7 +212,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         if self.config.is_continue:
             _,ckpt_path = load_ckpt_path(os.path.join(self.config.ckpt_dir,
                                         '{}'.format(self.current_model_num),
-                                        self.config.model.name)
+                                        self.config.model.name,'ckpts')
                                        ) 
             self.load_checkpoint(ckpt_path)
 
@@ -267,21 +281,14 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         """
         raise NotImplementedError
     
-    def save_checkpoint(self):
+    def save_checkpoint(self,ckpt_name):
         checkpoint = {
             'model': self.model.state_dict(),
             'optimizer': self.net_opt.state_dict(), #
             'epoch_step': self.global_step + self.discard_step,
             'current_model_num': self.current_model_num,
         }
-        torch.save(
-            checkpoint,
-                os.path.join(self.config.save_dir,"{}".format(self.current_model_num),
-                                '{}'.format(self.config.model.name),
-                                '{}-'.format(self.config.model.name)+
-                                '{}-'.format(self.config.case_name)+
-                                'ckpt_{:0>6d}.pt'.format(self.global_step+self.discard_step)
-                                ))
+        torch.save(checkpoint,ckpt_name)
     def load_checkpoint(self,ckpt_path=None):
         if ckpt_path == None: return
         system_dict = torch.load(ckpt_path,map_location='cpu')
@@ -300,9 +307,13 @@ class BaseSystem(pl.LightningModule,ImageProcess):
                 rgb : [w*h 3]
             }
         """
-        self.save_checkpoint()
-        out = self(batch,split='val')# rays:[W*H,3]
         
+        # if self.global_step % self.config.save_ckpt_freq == 0:
+        prefix = self.config.save_dir + f"/{self.current_model_num}/{self.config.model.name}"
+
+        
+        
+        out = self(batch,split='val')# rays:[W*H,3]
         # psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
         W, H = self.test_dataset.img_wh
         
@@ -310,7 +321,14 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         rgbs_val = out["rgb"].view(H, W, 3)
         depth = out['depth'].view(H, W)
         # opacity = out['opacity'].view(H, W)
-        self.save_image_grid(f"model_{self.current_model_num}_it{self.global_step+self.discard_step}_{batch['pose_idx']}.png", [
+        psnr_ = psnr(rgbs_true.to("cpu").numpy(),rgbs_val.to("cpu").numpy())
+        img_name = os.path.join(prefix,"images",\
+                                f"model_{self.current_model_num}_"+
+                                f"it{self.global_step+self.discard_step}_"+
+                                f"{batch['pose_idx']}_"+
+                                f"psnr:{psnr_}.png"
+                                )
+        self.save_image_grid(img_name, [
             {'type': 'rgb', 'img': rgbs_true, 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': rgbs_val, 'kwargs': {'data_format': 'HWC'}},
             {'type': 'grayscale', 'img': depth, 'kwargs': {}},
@@ -318,6 +336,24 @@ class BaseSystem(pl.LightningModule,ImageProcess):
             # {'type': 'grayscale', 'img': opacity, 'kwargs': {'cmap': None, 'data_range': (0, 1)}}
             
         ])
+        if (self.global_step+1) % self.config.val_mesh_freq == 0:
+            os.makedirs(os.path.join(self.config.save_dir,'mesh'),exist_ok=True)
+            mesh_name = os.path.join(prefix,"meshes",\
+                                f"model_{self.current_model_num}_"+
+                                f"it{self.global_step+self.discard_step}.ply"
+                                )
+            self.validate_mesh(mesh_name)
+            
+        if (self.global_step+1) % self.config.val_ckpt_freq == 0:
+            ckpt_name = os.path.join(prefix,"ckpts",
+                                f'{self.config.model.name}_'+
+                                f'{self.config.case_name}_'+
+                                'ckpt_{:0>6d}.pt'.format(self.global_step+self.discard_step)
+                                )
+            self.save_checkpoint(ckpt_name)
+        
+        
+        
         return {
             # 'psnr': psnr,
             'index': batch['pose_idx']
@@ -372,3 +408,20 @@ class BaseSystem(pl.LightningModule,ImageProcess):
                              self.train_dataset.scale[self.current_model_num,:])
 
             self.configure_optimizers()
+    # def generate_traj(self,pose_init=None):
+    #     if pose_init == None:
+    #         pose_init = self.poses[0]
+    #     traj_1=
+    def validate_mesh(self,mesh_name):
+        aabb = self.model.scene_aabb
+        vertices, triangles =\
+            extract_geometry(aabb, 
+                             resolution=self.config.model.geometry_network.isosurface.resolution, 
+                             threshold=self.config.model.geometry_network.isosurface.threshold,
+                             query_func=lambda pts: self.model.geometry_network(pts,with_fea=False,with_grad=False)['sigma'])
+        
+        mesh = trimesh.Trimesh(vertices,triangles)
+        mesh.export(mesh_name)
+            
+            
+            

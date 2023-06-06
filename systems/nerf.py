@@ -14,10 +14,10 @@ from datasets.colmap import ColmapDataset
 from model.nerf import vanillaNeRF
 from load_tool import draw_poses
 from utils.utils import load_ckpt_path
+from skimage.metrics import peak_signal_noise_ratio as psnr
 class NeRFSystem(BaseSystem):
     def __init__(self,config):
         super().__init__(config)#最初的config
-        #init不能将所有的模型都实例化
         pass
     def on_train_start(self):
         # self.model.mark_invisible_cells(self.train_dataset.K.to(self.device),
@@ -27,13 +27,11 @@ class NeRFSystem(BaseSystem):
     
     def forward(self, batch,split):
         if split == 'train':
-
             # poses = batch['pose']
             poses = self.poses[batch['pose_idx']]
             dirs = batch['directions']
             # dirs = self.directions
             rays_o, rays_d = get_rays(dirs,poses)
-            # print(batch['pose_idx'])
             del dirs,poses
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
             # draw_poses(poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh,pts3d=self.train_dataset.pts3d)
@@ -66,8 +64,12 @@ class NeRFSystem(BaseSystem):
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         
         self.log('geo_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
-        self.log('color_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True,sync_dist=True)
-
+        # self.log('color_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True,sync_dist=True)
+        with torch.no_grad():
+            pred = render_out['rgb'].to("cpu").numpy()
+            gt = batch['rays'].to("cpu").numpy()
+        
+        self.log('psnr',torch.tensor(psnr(gt,pred)),prog_bar=True,sync_dist=True)
         return {
             'loss': loss
         }
