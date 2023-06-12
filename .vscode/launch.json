@@ -32,8 +32,8 @@
             "args": [
                     //  test.py/datasets.py
                 // "--conf","./conf/conf_tcnn.json",
-                // "--conf_path","./config/neus-colmap.yaml",
-                "--conf_path","./config/nerf-colmap.yaml",
+                "--conf_path","./config/neus-colmap.yaml",
+                // "--conf_path","./config/nerf-colmap.yaml",
                 // "--conf","/home/will/test/L-NeRF/conf/conf.json",
                 "--gpu","0",
                 "--num_epochs","1",

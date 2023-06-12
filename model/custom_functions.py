@@ -145,7 +145,7 @@ class _march_rays_train(torch.autograd.Function):
         step_counter = torch.zeros(1, dtype=torch.int32, device=rays_o.device) # point counter, ray counter
         
         if perturb:
-            noises = torch.rand(N, dtype=rays_o.dtype, device=rays_o.device)
+            noises = torch.rand(N, dtype=rays_o.dtype, device=rays_o.device)*0.01
         else:
             noises = torch.zeros(N, dtype=rays_o.dtype, device=rays_o.device)
             
@@ -241,6 +241,69 @@ class _composite_rays_train(torch.autograd.Function):
 
 
 composite_rays_train = _composite_rays_train.apply
+
+
+
+
+class _composite_rays_from_alpha_train(torch.autograd.Function):
+    @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
+    def forward(ctx, alphas, rgbs, ts, rays, T_thresh=1e-4):
+        ''' composite rays' rgbs, according to the ray marching formula.
+        Args:
+            rgbs: float, [M, 3]
+            sigmas: float, [M,]
+            ts: float, [M, 2]
+            rays: int32, [N, 3]
+        Returns:
+            weights: float, [M]
+            weights_sum: float, [N,], the alpha channel
+            depth: float, [N, ], the Depth
+            image: float, [N, 3], the RGB channel (after multiplying alpha!)
+        '''
+        
+        sigmas = sigmas.float().contiguous()
+        rgbs = rgbs.float().contiguous()
+
+        M = sigmas.shape[0]
+        N = rays.shape[0]
+
+        weights = torch.zeros(M, dtype=sigmas.dtype, device=sigmas.device) # may leave unmodified, so init with 0
+        weights_sum = torch.empty(N, dtype=sigmas.dtype, device=sigmas.device)
+
+        depth = torch.empty(N, dtype=sigmas.dtype, device=sigmas.device)
+        image = torch.empty(N, 3, dtype=sigmas.dtype, device=sigmas.device)
+
+        studio.composite_rays_train_forward(sigmas, rgbs, ts, rays, M, N, T_thresh, weights, weights_sum, depth, image)
+
+        ctx.save_for_backward(sigmas, rgbs, ts, rays, weights_sum, depth, image)
+        ctx.dims = [M, N, T_thresh]
+
+        return weights, weights_sum, depth, image
+    
+    @staticmethod
+    @custom_bwd
+    def backward(ctx, grad_weights, grad_weights_sum, grad_depth, grad_image):
+        
+        grad_weights = grad_weights.contiguous()
+        grad_weights_sum = grad_weights_sum.contiguous()
+        grad_depth = grad_depth.contiguous()
+        grad_image = grad_image.contiguous()
+
+        sigmas, rgbs, ts, rays, weights_sum, depth, image = ctx.saved_tensors
+        M, N, T_thresh = ctx.dims
+   
+        grad_sigmas = torch.zeros_like(sigmas)
+        grad_rgbs = torch.zeros_like(rgbs)
+
+        studio.composite_rays_train_backward(grad_weights, grad_weights_sum, grad_depth, grad_image, sigmas, rgbs, ts, rays, weights_sum, depth, image, M, N, T_thresh, grad_sigmas, grad_rgbs)
+
+        return grad_sigmas, grad_rgbs, None, None, None
+
+
+composite_rays_from_alpha_train = _composite_rays_from_alpha_train.apply
+
+
 
 class _packbits(torch.autograd.Function):
     @staticmethod
@@ -350,6 +413,94 @@ class _composite_rays(torch.autograd.Function):
 
 
 composite_rays = _composite_rays.apply
+
+
+class _rendering_W_from_alpha(torch.autograd.Function):
+    """Rendering weight from opacity with naive forloop."""
+
+    @staticmethod
+    def forward(ctx, rays, alphas):
+        rays = rays.contiguous()
+        alphas = alphas.contiguous()
+        weights = studio.weight_from_alpha_forward(rays, alphas)
+        if ctx.needs_input_grad[1]:
+            ctx.save_for_backward(rays, alphas, weights)
+        return weights
+
+    @staticmethod
+    def backward(ctx, grad_weights):
+        grad_weights = grad_weights.contiguous()
+        rays, alphas, weights = ctx.saved_tensors
+        grad_alphas = studio.weight_from_alpha_backward(
+            weights, grad_weights, rays, alphas
+        )
+        return None, grad_alphas
+rendering_W_from_alpha = _rendering_W_from_alpha.apply
+
+class _rendering_T_from_alpha(torch.autograd.Function):
+    """Rendering transmittance from opacity with naive forloop."""
+
+    @staticmethod
+    def forward(ctx, rays, alphas):
+        rays = rays.contiguous()
+        alphas = alphas.contiguous()
+        transmittance = studio.transmittance_from_alpha_forward(
+            rays, alphas
+        )
+        if ctx.needs_input_grad[1]:
+            ctx.save_for_backward(rays, transmittance, alphas)
+        return transmittance
+
+    @staticmethod
+    def backward(ctx, transmittance_grads):
+        transmittance_grads = transmittance_grads.contiguous()
+        rays, transmittance, alphas = ctx.saved_tensors
+        grad_alphas = studio.transmittance_from_alpha_backward(
+            rays, alphas, transmittance, transmittance_grads
+        )
+        return None, grad_alphas
+rendering_T_from_alpha = _rendering_T_from_alpha.apply
+
+def accumulate_along_rays(weights,rays,values=None,n_rays=None):
+    if values is not None:
+        src = weights * values
+    else:
+        src = weights
+    n_samples = weights.shape[0]
+    ray_indices = studio.unpack_rays(rays,n_samples)
+    index = ray_indices[:, None].expand(-1, src.shape[-1])
+    outputs = torch.zeros(
+        (n_rays, src.shape[-1]), device=src.device, dtype=src.dtype
+    )
+    outputs.scatter_add_(0, index, src)
+    return outputs
+
+
+
+def rendering_with_alpha(alphas,rgbs,ts,rays,n_rays):
+    weights = rendering_W_from_alpha(rays,alphas)
+    # rgbs = rgbs.view(-1,1)
+    colors = accumulate_along_rays(
+        weights,rays,values=rgbs,n_rays=n_rays
+    )
+    opacities = accumulate_along_rays(
+        weights, rays, values=None, n_rays=n_rays
+    )
+    depths = accumulate_along_rays(
+        weights,
+        rays,
+        # values=(ts[:,0]+ts[:,0]+ts[:,1]).view(-1,1) / 2.0,
+        values=ts[:,0].view(-1,1),
+        n_rays=n_rays,
+    )
+    return colors,opacities,depths
+
+    
+
+
+
+
+
 class TruncExp(torch.autograd.Function):
     @staticmethod
     # @torch.cuda.amp.autocast()

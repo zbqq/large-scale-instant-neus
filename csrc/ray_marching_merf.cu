@@ -1,14 +1,4 @@
-#include <cuda.h>
-#include <cuda_fp16.h>
-#include <cuda_runtime.h>
 
-#include <ATen/cuda/CUDAContext.h>
-#include <torch/torch.h>
-
-#include <cstdio>
-#include <stdint.h>
-#include <stdexcept>
-#include <limits>
 #include "utils.h"
 #include "helper_math.h"
 #define CHECK_CUDA(x) TORCH_CHECK(x.device().is_cuda(), #x " must be a CUDA tensor")
@@ -509,7 +499,7 @@ __global__ void kernel_composite_rays_train_forward(
     const scalar_t * __restrict__ rgbs,  
     const scalar_t * __restrict__ ts,
     const int * __restrict__ rays,
-    const uint32_t M, const uint32_t N, const float T_thresh, 
+    const uint32_t M, const uint32_t N, const float T_thresh, //
     scalar_t * weights,
     scalar_t * weights_sum,
     scalar_t * depth,
@@ -554,6 +544,7 @@ __global__ void kernel_composite_rays_train_forward(
         r += weight * rgbs[0];
         g += weight * rgbs[1];
         b += weight * rgbs[2];
+
         ws += weight;
         d += weight * ts[0];
         

@@ -47,13 +47,13 @@ class NeRFLoss(nn.Module):
     def forward(self, results, target, **kwargs):
         d = {}
         # d['rgb'] = F.mse_loss(results['rgb'],target['rays'].to(self.device),reduction='mean') * self.config.lambda_rgb
-        d['rgb'] = (results['rgb']-target['rays'])**2 * self.config.lambda_rgb
-        # d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays'].to(self.device))#训练的epoch小的话很不好
+        # d['rgb'] = (results['rgb']-target['rays'])**2 * self.config.lambda_rgb
+        d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays']) * self.config.lambda_rgb#训练的epoch小的话很不好
         o = results['opacity']+1e-10
         # o = results['opacity'][results['rays_valid']]+1e-10
         # encourage opacity to be either 0 or 1 to avoid floater
         d['opacity'] = self.lambda_opacity*(-o*torch.log(o))*self.config.lambda_opacity
-        # d['eikonal']=((torch.linalg.norm(results['gradients'], ord=2, dim=-1) - 1.)**2).mean()*self.config.lambda_eikonal
+        d['eikonal']=((torch.linalg.norm(results['grad'], ord=2, dim=-1) - 1.)**2).mean()*self.config.lambda_eikonal
         if self.lambda_distortion > 0:
             d['distortion'] = self.lambda_distortion * \
                 DistortionLoss.apply(results['ws'], results['deltas'],

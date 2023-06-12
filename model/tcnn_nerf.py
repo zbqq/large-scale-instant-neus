@@ -114,16 +114,20 @@ class SDF(baseImplicitRep):
         #         n_output_dims=16,
         #         network_config=self.config["mlp_network_config"]
         #     )
+        self.activation = nn.Softplus(beta=100)
         self.network = nn.Sequential(
 			nn.Linear(self.xyz_encoder.n_output_dims, 64),
 			nn.ReLU(True),
-			# nn.Linear(64, 64),
-			# nn.ReLU(True),
+			# self.activation,
+			nn.Linear(64, 64),
+			nn.ReLU(True),
+			# self.activation,
 			nn.Linear(64, 16)
 		)
 
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
-        
+        # pts_=pts.clone()
+        # pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T).max()
         pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T)
         # with torch.set_grad_enabled(with_grad):#罪魁祸首
         with torch.enable_grad():
@@ -133,7 +137,8 @@ class SDF(baseImplicitRep):
             h = self.network(h)
             sdf = h[:, 0]
             fea = h
-            result={'sdf':sdf}
+            # sdf = sdf * (self.xyz_max.T-self.xyz_min.T).max()
+            result={'sigma':sdf}
             if with_fea==True:
                 result["fea"]=fea
             if with_grad:
@@ -143,6 +148,8 @@ class SDF(baseImplicitRep):
                             retain_graph=True, 
                             only_inputs=True
                         )[0]
+                normals = grad/torch.norm(grad,dim=-1).reshape(-1,1)
+                result["normals"]=normals
                 result["grad"]=grad
         return result
     

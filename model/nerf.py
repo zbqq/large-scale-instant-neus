@@ -23,15 +23,17 @@ class vanillaNeRF(baseModule):
             sigma = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
             sigma = torch.sigmoid(sigma)[...,None]
             return sigma.reshape(-1).detach()
-        
-        self.update_extra_state(occ_eval_fn = lambda pts: occ_eval_fn(x=pts))
-        # self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.98)
+        if self.config.use_nerfacc:
+            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.98)
+        else:
+            self.update_extra_state(occ_eval_fn = lambda pts: occ_eval_fn(x=pts))
+
         
     def get_alpha(self, sigma, dists):#计算
 
-        alpha = torch.ones_like(sigma) - torch.exp(- sigma * dists)
+        alphas = torch.ones_like(sigma) - torch.exp(- sigma * dists)
 
-        return alpha    
+        return alphas.view(-1,1)
 
     def forward(self,rays_o,rays_d,split):
         if self.config.use_nerfacc:

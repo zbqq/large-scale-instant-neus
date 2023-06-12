@@ -206,3 +206,9 @@ def create_spheric_poses(radius, mean_h, n_poses=120):
         spheric_poses += [spheric_pose(th, -np.pi/12, radius)]
     return np.stack(spheric_poses, 0)
     
+def scale_anything(dat, inp_scale, tgt_scale):
+    if inp_scale is None:
+        inp_scale = [dat.min(), dat.max()]
+    dat = (dat  - inp_scale[0]) / (inp_scale[1] - inp_scale[0])
+    dat = dat * (tgt_scale[1] - tgt_scale[0]) + tgt_scale[0]
+    return dat

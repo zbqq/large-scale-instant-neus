@@ -4,29 +4,32 @@ tag: ''
 # seed: 42
 seed: 37
 # case_name: magicSqure
-# case_name: scan65
-case_name: DJI951
+case_name: scan65
+# case_name: DJI951
 # case_name: ObliqueSBY1580
-root_dir: /data3/zzy/data_lab/${case_name}
-# root_dir: /data3/zzy/public_data/${case_name}
+# root_dir: /data3/zzy/data_lab/${case_name}
+root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
-grid_X: 4
-grid_Y: 4
+grid_X: 1
+grid_Y: 1
 # mask_dir: ${root_dir}/ray_distance_mask/${grid_X}x${grid_Y}
 mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 9 # 开始从第几个模型训练
+model_start_num: 0 # 开始从第几个模型训练
 validate_freq: 300
-val_mesh_freq: 10000000
+val_mesh_freq: 1000000
+# validate_freq: 1
+# val_mesh_freq: 1
 val_ckpt_freq: 600
 
-is_continue: false
+is_continue: true
+# is_continue: false
 use_DDP: false
 dataset:
-  downsample: 0.4 #训练集的图像降采样率
-  scale_to: 8 #scale放缩至该绝对尺度
+  downsample: 1.0 #训练集的图像降采样率
+  scale_to: 4 #scale放缩至该绝对尺度
   use_random: true
   name: colmap
   root_dir: ${root_dir}
@@ -48,11 +51,11 @@ model:
   name: neus
   aabb:
     use_custom_radius: false
-  grid_update_freq: 100
+  grid_update_freq: 80
   grid_resolution: 256 # 128
-  num_samples_per_ray: 512 # 512
+  num_samples_per_ray: 876 # 512
   grid_prune: true
-  use_nerfacc: false
+  use_nerfacc: true
   dynamic_ray_sampling: true
   batch_image_sampling: true
   randomized: true
@@ -61,9 +64,10 @@ model:
   fp16: true
   T_thresh: 2e-4
   density_thresh: 10.
-  scale_zoom_up: 1.2 #放大一个块的尺度以实现重叠
-  init_variance: 0.05
-  cos_anneal_end: 50
+  scale_zoom_up: 1.0 #放大一个块的尺度以实现重叠
+  init_variance: 0.045
+  cos_anneal_end: 5000
+  rendering_from_alpha: true
   geometry_network:
     feature_dim: 13
     sdf_activation: none
@@ -79,7 +83,7 @@ model:
       type: Hash
       n_levels: 16
       n_features_per_level: 2
-      log2_hashmap_size: 20 # 大小只影响是否hash冲突
+      log2_hashmap_size: 21 # 大小只影响是否hash冲突
       base_resolution: 16
       
       # per_level_scale: 1.381912879967776 #N_max = 2048
@@ -118,9 +122,9 @@ system:
   name: neus-system
   loss:
     lambda_rgb: 1.
-    lambda_opacity: 0.2
+    lambda_opacity: 0.3
+    lambda_eikonal: 0.2
     lambda_mask: 0.
-    lambda_eikonal: 0.05
   optimizer:
     # name: Adam
     name: FusedAdam
@@ -129,11 +133,11 @@ system:
       eps: 1.e-15
     params:
       geometry_network:
-          lr: 3.e-3
+          lr: 3.e-4
       color_net:
-          lr: 3.e-3
+          lr: 3.e-4
       variance:
-          lr: 2.e-3
+          lr: 2.e-4
   scheduler:
     name: ExponentialLR
     interval: step

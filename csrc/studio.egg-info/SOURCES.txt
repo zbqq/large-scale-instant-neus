@@ -1,6 +1,9 @@
 binding.cpp
 divide_mask.cu
+pack.cu
 ray_marching_merf.cu
+rendering_T.cu
+rendering_W.cu
 setup.py
 studio.egg-info/PKG-INFO
 studio.egg-info/SOURCES.txt

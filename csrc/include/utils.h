@@ -1,12 +1,26 @@
 #pragma once
 #include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_fp16.h>
+#include <cuda_runtime.h>
 
+#include <ATen/cuda/CUDAContext.h>
+#include <torch/torch.h>
+
+#include <cstdio>
+#include <stdint.h>
+#include <stdexcept>
+#include <limits>
 #define CHECK_CUDA(x) TORCH_CHECK(x.is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) TORCH_CHECK(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
-
-
-
+#define CUDA_GET_THREAD_ID(tid, Q)                         \
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x; \
+    if (tid >= Q)                                          \
+    return
+#define CUDA_N_BLOCKS_NEEDED(Q, CUDA_N_THREADS) ((Q - 1) / CUDA_N_THREADS + 1)
+#define DEVICE_GUARD(_ten) \
+    const at::cuda::OptionalCUDAGuard device_guard(device_of(_ten));
 //packbits_32
 
 torch::Tensor packbits_u32(
@@ -118,3 +132,28 @@ void composite_rays(
     at::Tensor sigmas, at::Tensor rgbs, at::Tensor ts, 
     at::Tensor weights_sum, at::Tensor depth, at::Tensor image
 );
+
+torch::Tensor transmittance_from_alpha_forward(
+    torch::Tensor rays, 
+    torch::Tensor alphas
+);
+torch::Tensor transmittance_from_alpha_backward(
+    torch::Tensor rays,
+    torch::Tensor alphas,
+    torch::Tensor transmittance,
+    torch::Tensor transmittance_grad
+);
+
+
+torch::Tensor weight_from_alpha_forward(
+    torch::Tensor rays, 
+    torch::Tensor alphas
+);
+torch::Tensor weight_from_alpha_backward(
+    torch::Tensor weights,
+    torch::Tensor grad_weights,
+    torch::Tensor rays,
+    torch::Tensor alphas
+);
+
+torch::Tensor unpack_rays(const torch::Tensor packed_info, const int n_samples);

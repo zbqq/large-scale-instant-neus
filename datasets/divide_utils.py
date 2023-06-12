@@ -29,7 +29,7 @@ class divideTool():
         self.split = split   
         self.Rc_path = os.path.join(self.config.root_dir,'R_correct.txt')#需要输入的
         self.new_pts3d_path = os.path.join(self.config.root_dir,'new_pts3d.txt')#需要输入的
-        self.centers_and_scales_path = os.path.join(self.config.root_dir,'CaS.txt')#输出的
+        self.centers_and_scales_path = os.path.join(self.config.root_dir,f'CaS_{self.model_num}.txt')#输出的
         self.mask_save_path = os.path.join(self.config.mask_dir,"model")
         self.model_num = self.config.grid_X * self.config.grid_Y
         # if torch.cuda.is_available():

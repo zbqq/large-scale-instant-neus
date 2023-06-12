@@ -22,7 +22,10 @@ rule cuda_compile
 
 build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o: compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/binding.cpp
 build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/divide_mask.cu
+build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/pack.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/pack.cu
 build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/ray_marching_merf.cu
+build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/rendering_W.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/rendering_W.cu
+build /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/rendering_T.o: cuda_compile /home/zzy/engineer/git_test/large-scale-instant-neus/csrc/rendering_T.cu
 
 
 

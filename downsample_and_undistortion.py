@@ -9,6 +9,7 @@ from systems.base import ImageProcess
 import os
 import glob
 from tqdm import tqdm
+from datasets.colmap_utils import read_cameras_binary
 def params_from_models(camera_model:np.ndarray,downsample:float=1.0):
     ## Radial-Tangential distortion model
     fx = camera_model[1]*downsample
@@ -40,22 +41,28 @@ if __name__ == '__main__':
     
     dataset = ColmapDataset(config.dataset,split='divide',downsample=config.dataset.downsample)
     # assert dataset.camera_model == "OPENCV"
-    camera_models = np.loadtxt(os.path.join(config.root_dir,"cameras.txt"))
-    K,distortion=params_from_models(camera_models[0,:])
+    # camera_models = np.loadtxt(os.path.join(config.root_dir,"sparse/0","cameras.txt"))
+    # camera_models = read_cameras_binary(os.path.join(config.root_dir,"sparse/0","cameras.bin"))
+    # K,distortion=params_from_models(camera_models[0,:])
     input_path = os.path.join(config.root_dir,'images')
+    prefix = "images_undistorted_{}".format(config.dataset.downsample)
+    output_path = os.path.join(config.root_dir,prefix)
+    os.makedirs(output_path,exist_ok=True)
     file_patterns = os.path.join(input_path, '**/*')
     file_paths = glob.glob(file_patterns, recursive=True)
     pbar = tqdm(total=len(file_paths))
     for file in file_paths:
-        file_name = file.replace("images","images_undistorted_{}".format(config.dataset.downsample))
+        file_name = file.replace("images",prefix)
+        # os.makedirs(file_name,exist_ok=True)
         if os.path.isdir(file):
             os.makedirs(file_name,exist_ok=True)
             continue
         distorted = cv2.imread(file)
-        undistorted = cv2.undistort(distorted,
-                        K.numpy(),
-                        distortion
-                        )
+        # undistorted = cv2.undistort(distorted,
+        #                 K.numpy(),
+        #                 distortion
+        #                 )\
+        undistorted = distorted
         undistorted = cv2.resize(undistorted,(dataset.img_wh[0],dataset.img_wh[1]))
         cv2.imwrite(file_name,undistorted)
         pbar.update(1)

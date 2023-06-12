@@ -16,7 +16,9 @@ from omegaconf import OmegaConf
 from kornia.utils.grid import create_meshgrid3d
 from torch.cuda.amp import custom_fwd, custom_bwd
 from .custom_functions import \
-    march_rays_train, near_far_from_aabb, composite_rays_train, morton3D, morton3D_invert, packbits,march_rays,composite_rays
+    march_rays_train, near_far_from_aabb, composite_rays_train, \
+        morton3D, morton3D_invert, packbits,march_rays,composite_rays,\
+            rendering_with_alpha
 # import .custom_functions
 import torch
 from torch import nn
@@ -52,7 +54,7 @@ class baseModule(nn.Module):
         
         self.geometry_network.setup(center,scale)
         # self.render_step_size = 1.732 * 2.5 * max(scale)/ self.config.num_samples_per_ray
-        self.render_step_size = 1.732 * 2 * scale[2]/ self.config.num_samples_per_ray
+        self.render_step_size = 1.732 * 2 * scale[2]/ self.config.num_samples_per_ray *2
         # 无人机视角下不包含
         
         self.register_buffer('scene_aabb', \
@@ -137,7 +139,7 @@ class baseModule(nn.Module):
                                         True, self.density_bitfield, 
                                         self.C, self.H, 
                                         nears, fars, perturb, 
-                                        self.config.dt_gamma, self.config.num_samples_per_ray)
+                                        self.config.dt_gamma, self.config.num_samples_per_ray,)
                 
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,pts3d=xyzs.to('cpu'),aabb_=self.scene_aabb[None,...],t_min=nears,t_max=fars)
             # draw_poses(pts3d=xyzs.to('cpu'),aabb_=self.scene_aabb[None,...],t_min=nears,t_max=fars)
@@ -145,22 +147,41 @@ class baseModule(nn.Module):
             xyzs += self.center.view(-1,3)
             dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
             with torch.cuda.amp.autocast(enabled=self.config.fp16):
-                geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
-                sigmas,feas = geo_output['sigma'],geo_output['fea']
+                # geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
+                # sigmas,feas = geo_output['sigma'],geo_output['fea']
+                # rgbs = self.color_net(dirs,feas)
+                geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=True)
+                sigmas,feas,normals = geo_output['sigma'],geo_output['fea'],geo_output['grad']
+                # sigmas,feas,normals,grad = geo_output['sigma'],geo_output['fea'],geo_output['normals'],geo_output["grad"]
                 rgbs = self.color_net(dirs,feas)
-                # outputs = self(xyzs, dirs, shading=shading)
-                # sigmas = outputs['sigma']
-                # rgbs = outputs['color']
+                # rgbs = self.color_net(dirs,feas,normals)
 
-            weights, weights_sum, depth, image = \
-                composite_rays_train(sigmas, rgbs, ts, rays, self.config.T_thresh)
-            results = {
-                'num_points':xyzs.shape[0],
-                'weights':weights,
-                # 'rays_valid':weights_sum>0,
-                'opacity':torch.clamp(weights_sum,1e-12,1000),
-                'num_points':xyzs.shape[0]
-            }
+
+            if self.config.rendering_from_alpha:
+                # alphas = self.get_alpha(sigmas,ts[:,1])
+                alphas = self.get_alpha(sigmas,normals,dirs,ts[:,1])
+                image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
+                results = {
+                    'num_points':xyzs.shape[0],
+                    # 'weights':weights,
+                    # 'rays_valid':weights_sum>0,
+                    'normals':normals,
+                    'opacity':torch.clamp(opacities,1e-12,1000),
+                    'num_points':xyzs.shape[0],
+                    # 'grad':grad
+                }
+            
+            else:
+                weights, weights_sum, depth, image = \
+                    composite_rays_train(sigmas, rgbs, ts, rays, self.config.T_thresh)
+            
+                results = {
+                    'num_points':xyzs.shape[0],
+                    'weights':weights,
+                    # 'rays_valid':weights_sum>0,
+                    'opacity':torch.clamp(weights_sum,1e-12,1000),
+                    'num_points':xyzs.shape[0]
+                }
             # opacity = torch.clamp(weights_sum,1e-12,1000)
             
             

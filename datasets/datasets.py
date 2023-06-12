@@ -135,10 +135,10 @@ class BaseDataset(IterableDataset):
         self.mask_name.sort()
         if self.split == 'train':
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8!=0]
-            self.idxs = [i for i in range(0,len(self.idxs)) if i%8!=0]
+            self.idxs = [i for i in range(0,len(self.idxs)) if i%50!=0]
         elif self.split == 'test':
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
-            self.idxs = [i for i in range(0,len(self.idxs)) if i%8==0]
+            self.idxs = [i for i in range(0,len(self.idxs)) if i%9==0]
     def revise(self,theta,axis='y'):
         self.poses,self.pts3d,self.center = \
             revise(poses=self.poses,pts3d=self.pts3d,theta=theta,axis=axis)
@@ -205,6 +205,7 @@ class BaseDataset(IterableDataset):
             self.pose_idx = self.idx_list[self.idx_tmp]
             while True:
                 Idx = torch.load(self.mask_name[self.pose_idx])
+                # Idx = torch.load(self.mask_name[0])
                 pose_idx = Idx['pose_idx']
                 # pose = self.poses[pose_idx]
                 img = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False)# w*h 3
@@ -214,7 +215,10 @@ class BaseDataset(IterableDataset):
                 }
                 self.idx_tmp += 1
                 self.idx_tmp %= len(self.idx_list)
-    
+    def generate_traj(self,pose_init=None):
+        if pose_init == None:
+            pose_init = self.poses[0]
+        
     
     
 class LoadPoseNeeded(IterableDataset):

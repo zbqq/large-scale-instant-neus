@@ -16,7 +16,7 @@ class NeuS(baseModule):
         
         # self.render_step_size = 1.732 * 2 * self.config.aabb.radius_z / self.config.num_samples_per_ray
         
-        self.geometry_network = SDF(self.config.sdf_network)
+        self.geometry_network = SDF(self.config.geometry_network)
         self.variance = VarianceNetwork(self.config.init_variance)
         self.color_net = RenderingNet(self.config.color_net)
         
@@ -27,22 +27,34 @@ class NeuS(baseModule):
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
         cos_anneal_end = self.config.get('cos_anneal_end', 0)
         self.cos_anneal_ratio = 1.0 if cos_anneal_end == 0 else min(1.0, global_step / cos_anneal_end)
-        
-        
-        def occ_eval_fn(x): # neus2's occ_eval_fn
-            sdf = self.geometry_network(x, with_fea=False, with_grad=False)["sdf"]
+        if self.config.use_nerfacc:
+            def occ_eval_fn(x):
+                sdf = self.geometry_network(x, with_grad=False, with_fea=False)['sigma']
+                inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
+                inv_s = inv_s.expand(sdf.shape[0], 1)
+                estimated_next_sdf = sdf[...,None] - self.render_step_size * 0.5
+                estimated_prev_sdf = sdf[...,None] + self.render_step_size * 0.5
+                prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
+                next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
+                p = prev_cdf - next_cdf
+                c = prev_cdf
+                alpha = ((p + 1e-5) / (c + 1e-5)).view(-1, 1).clip(0.0, 1.0)
+                return alpha
+                # return torch.ones_like(alpha,dtype=alpha.dtype)
+            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.95)
             
-            inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)#可以做一点改动
-            inv_s = inv_s.expand(sdf.shape[0], 1)
-            density = inv_s*torch.sigmoid(inv_s*sdf[...,None])*torch.sigmoid(inv_s*sdf[...,None])*(1/torch.sigmoid(inv_s*sdf[...,None])-1)
-            density = density.clip(0.0, 1.0)
+        else:
+            #     return density.reshape(-1).detach()
+            
+            def occ_eval_fn(x): # neus2's occ_eval_fn
+                sdf = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
 
-
-            return density.reshape(-1).detach()
-            # return torch.ones_like(alpha,dtype=alpha.dtype)
-        self.update_extra_state(occ_val_fn=lambda pts: occ_eval_fn(x=pts))
-        # self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.95)
+                inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)#可以做一点改动
+                inv_s = inv_s.expand(sdf.shape[0], 1)
+                density = inv_s*torch.sigmoid(inv_s*sdf[...,None])*torch.sigmoid(inv_s*sdf[...,None])*(1/torch.sigmoid(inv_s*sdf[...,None])-1)
+                density = density.clip(0.0, 1.0)
         
+            self.update_extra_state(occ_eval_fn=lambda pts: occ_eval_fn(x=pts))
         
         
     def get_alpha(self, sdf, normal, dirs, dists):
@@ -67,7 +79,7 @@ class NeuS(baseModule):
         c = prev_cdf
 
         alpha = ((p + 1e-6) / (c + 1e-6)).view(-1).clip(0.0, 1.0)
-        return alpha  
+        return alpha.reshape(-1,1)
     def forward(self,rays_o,rays_d,split):
         if self.config.use_nerfacc:
             sdf_grad_samples = []
@@ -80,11 +92,11 @@ class NeuS(baseModule):
                 midpoints = (t_starts + t_ends) / 2.
                 positions = t_origins + t_dirs * midpoints
                 out = self.geometry_network(positions, with_fea=False, with_grad=True)
-                sdf, sdf_grad=out["sdf"], out["grad"]
+                sdf, sdf_grad=out["sigma"], out["grad"]
                 dists = t_ends - t_starts
                 normal = F.normalize(sdf_grad, p=2, dim=-1)
                 alpha = self.get_alpha(sdf, normal, t_dirs, dists)#获取rho
-                return alpha[...,None]#[N_samples, 1]
+                return alpha#[N_samples, 1]
             def rgb_alpha_fn(t_starts, t_ends, ray_indices):
                 ray_indices = ray_indices.long()
                 t_origins = rays_o[ray_indices]
@@ -92,27 +104,26 @@ class NeuS(baseModule):
                 midpoints = (t_starts + t_ends) / 2.
                 positions = t_origins + t_dirs * midpoints
                 out = self.geometry_network(positions, with_fea=True, with_grad=True)
-                sdf, sdf_grad, feature=out["sdf"],out["grad"],out["fea"]
+                sdf, sdf_grad, feature=out["sigma"],out["grad"],out["fea"]
                 sdf_grad_samples.append(sdf_grad)
                 dists = t_ends - t_starts
                 normal = F.normalize(sdf_grad, p=2, dim=-1)
                 alpha = self.get_alpha(sdf, normal, t_dirs, dists)
                 rgb = self.color_net(t_dirs,feature, normal)
-                return rgb, alpha[...,None]  
+                return rgb, alpha
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb)
 
             with torch.no_grad():#ray_marching过程中不累加nabla
-                t_min,t_max = ray_aabb_intersect(rays_o,rays_d,self.scene_aabb)
 
                 ray_indices, t_starts, t_ends = \
                     ray_marching(
                         rays_o,rays_d,
-                        t_min=t_min,t_max=t_max,
                         scene_aabb=self.scene_aabb,
                         grid = self.occupancy_grid,
                         alpha_fn = alpha_fn,
                         near_plane=None, far_plane=None,
                         render_step_size=self.render_step_size,
+                        stratified=True,
                         cone_angle = 0.0,
                         alpha_thre = 0.0
                     )
@@ -132,14 +143,16 @@ class NeuS(baseModule):
                 'depth': depth,
                 'rays_valid': opacity > 0,
                 'num_samples': torch.as_tensor([len(t_starts)], dtype=torch.int32, device=rays_o.device),
-                'gradients': torch.concat(sdf_grad_samples,dim=0),
+                'grad': torch.concat(sdf_grad_samples,dim=0),
                 'inv_s':self.variance.inv_s
             } 
 
             return result
         else:
-                result = self.render(rays_o,rays_d,split=split)
-                return result
+            result = self.render(rays_o,rays_d,split=split,perturb=True)
+            inv_s=self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
+            result['inv_s']=inv_s[0]
+            return result
         
         
         

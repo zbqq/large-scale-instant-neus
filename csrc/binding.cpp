@@ -24,5 +24,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m){
     m.def("march_rays", &march_rays);
     m.def("composite_rays", &composite_rays);
 
+    m.def("weight_from_alpha_backward",&weight_from_alpha_backward);
+    m.def("weight_from_alpha_forward",&weight_from_alpha_forward);
+
+
+    m.def("weight_from_alpha_backward",&weight_from_alpha_backward);
+    m.def("weight_from_alpha_backward",&weight_from_alpha_backward);
+
+    m.def("unpack_rays",&unpack_rays);
+
 }
 

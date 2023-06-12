@@ -186,8 +186,8 @@ class BaseSystem(pl.LightningModule,ImageProcess):
             prefix = os.path.join(self.config.save_dir,'0','{}'.format(self.config.model.name))
             os.makedirs(prefix,exist_ok=True)
             os.makedirs(prefix+"/ckpts",exist_ok=True)
-            os.makedirs(prefix+"meshes",exist_ok=True)
-            os.makedirs(prefix+"images",exist_ok=True)
+            os.makedirs(prefix+"/meshes",exist_ok=True)
+            os.makedirs(prefix+"/images",exist_ok=True)
             
         
         self.current_model_num = self.config.model_start_num # 训练到的第几个模型
@@ -408,10 +408,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
                              self.train_dataset.scale[self.current_model_num,:])
 
             self.configure_optimizers()
-    # def generate_traj(self,pose_init=None):
-    #     if pose_init == None:
-    #         pose_init = self.poses[0]
-    #     traj_1=
+    
     def validate_mesh(self,mesh_name):
         aabb = self.model.scene_aabb
         vertices, triangles =\
