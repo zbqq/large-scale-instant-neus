@@ -178,33 +178,39 @@ def create_spheric_poses(radius, mean_h, n_poses=120):
     Outputs:
         spheric_poses: (n_poses, 3, 4) the poses in the circular path
     """
-    def spheric_pose(theta, phi, radius):
-        trans_t = lambda t : np.array([
+    def spheric_pose(theta, phi,psi,radius):
+        trans_t = lambda t : torch.tensor([
             [1,0,0,0],
-            [0,1,0,2*mean_h],
-            [0,0,1,-t]
-        ])
+            [0,1,0,-t],
+            [0,0,1,0.5*mean_h]
+        ],dtype=torch.float32)
 
-        rot_phi = lambda phi : np.array([
+        rot_phi = lambda phi : torch.tensor([
             [1,0,0],
             [0,np.cos(phi),-np.sin(phi)],
             [0,np.sin(phi), np.cos(phi)]
-        ])
+        ],dtype=torch.float32)
 
-        rot_theta = lambda th : np.array([
+        rot_theta = lambda th : torch.tensor([
             [np.cos(th),0,-np.sin(th)],
             [0,1,0],
             [np.sin(th),0, np.cos(th)]
-        ])
-
-        c2w = rot_theta(theta) @ rot_phi(phi) @ trans_t(radius)
-        c2w = np.array([[-1,0,0],[0,0,1],[0,1,0]]) @ c2w
+        ],dtype=torch.float32)
+        rot_psi = lambda psi : torch.tensor([
+            
+            [np.cos(psi),-np.sin(psi),0],
+            
+            [np.sin(psi),np.cos(psi),0],
+            [0,0,1]
+        ],dtype=torch.float32)
+        c2w = rot_psi(psi)@rot_phi(phi)  @ trans_t(radius)
+        # c2w = torch.tensor([[-1,0,0],[0,0,1],[0,1,0]],dtype=torch.float32) @ c2w
         return c2w
 
     spheric_poses = []
-    for th in np.linspace(0, 2*np.pi, n_poses+1)[:-1]:
-        spheric_poses += [spheric_pose(th, -np.pi/12, radius)]
-    return np.stack(spheric_poses, 0)
+    for psi in np.linspace(0, 2*np.pi, n_poses+1)[:-1]:
+        spheric_poses += [spheric_pose(0, -np.pi/12,psi, radius)]
+    return torch.stack(spheric_poses, 0)
     
 def scale_anything(dat, inp_scale, tgt_scale):
     if inp_scale is None:
@@ -212,3 +218,36 @@ def scale_anything(dat, inp_scale, tgt_scale):
     dat = (dat  - inp_scale[0]) / (inp_scale[1] - inp_scale[0])
     dat = dat * (tgt_scale[1] - tgt_scale[0]) + tgt_scale[0]
     return dat
+
+
+def sampled_pdf():
+    pass
+
+
+
+
+def pts_from_rays(rays_o,rays_d,near,far):
+    
+    
+    
+    
+    
+    
+    pass    
+
+
+
+
+
+def get_pts(rays_o,rays_d,near,far,):
+    rays_o = rays_o.view(rays_o.shape[0], 1, rays_o.shape[1])
+    rays_d = rays_d.view(rays_d.shape[0], 1, rays_d.shape[1])
+    
+    
+    
+    
+    
+    
+    
+    
+    

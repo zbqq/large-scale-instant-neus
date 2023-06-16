@@ -30,9 +30,9 @@ if __name__ == '__main__':
     parser.add_argument('--conf_path',default='./config/neus-colmap.yaml')
     parser.add_argument('--gpu',type=str,default='0')
     parser.add_argument('--num_epochs',type=int,default=1)
-    system = {}
-    system['nerf-system'] = NeRFSystem
-    system['neus-system'] = NeuSSystem
+    systems = {}
+    systems['nerf-system'] = NeRFSystem
+    systems['neus-system'] = NeuSSystem
     
     args, extras = parser.parse_known_args()
     config = load_config(args.conf_path,cli_args=extras)
@@ -54,7 +54,8 @@ if __name__ == '__main__':
     # if config.is_continue==True:
     #     step = load_ckpt_path(config.save_dir)
     # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-    system = system[config.system.name](config) 
+
+    system = systems[config.system.name](config) 
     trainer = Trainer(
         max_epochs = args.num_epochs,
         check_val_every_n_epoch = args.num_epochs,
@@ -65,8 +66,8 @@ if __name__ == '__main__':
         # strategy = strategy,
         **config.trainer
     )
-    print("rank:",trainer.local_rank)
-    trainer.fit(system)
+    # print("rank:",trainer.local_rank)
+    trainer.fit(system,)
     
     
     

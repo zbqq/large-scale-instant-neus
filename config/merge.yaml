@@ -5,33 +5,34 @@ tag: ''
 seed: 37
 # case_name: magicSqure
 # case_name: scan65
-case_name: lego_test
-# case_name: DJI951
+# case_name: lego_test
+case_name: DJI951
 # case_name: ObliqueSBY1580
-# root_dir: /data3/zzy/data_lab/${case_name}
-root_dir: /data3/zzy/public_data/${case_name}
+root_dir: /data3/zzy/data_lab/${case_name}
+# root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
-grid_X: 1
-grid_Y: 1
+grid_X: 4
+grid_Y: 4
 # mask_dir: ${root_dir}/ray_distance_mask/${grid_X}x${grid_Y}
+# mask_dir: ${root_dir}/camera_position_mask/${grid_X}x${grid_Y}
 mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 0 # 开始从第几个模型训练
+model_start_num: 10 # 开始从第几个模型训练
 validate_freq: 300
-val_mesh_freq: 1000000
+val_mesh_freq: 10000
 # validate_freq: 1
 # val_mesh_freq: 1
 val_ckpt_freq: 600
 
-# is_continue: true
 is_continue: false
+# is_continue: true
 use_DDP: false
 dataset:
-  downsample: 1.0 #训练集的图像降采样率
-  test_downsample: 1.0
-  scale_to: 0.5 #scale放缩至该绝对尺度
+  downsample: 0.4 #训练集的图像降采样率
+  test_downsample: 0.2
+  scale_to: 8 #scale放缩至该绝对尺度
   use_random: true
   name: colmap
   root_dir: ${root_dir}
@@ -39,8 +40,8 @@ dataset:
   # batch_size: 128
   # batch_size: 2048
   # batch_size: 3248
-  batch_size: 4096
-  # batch_size: 8192
+  # batch_size: 4096
+  batch_size: 8192
   # batch_size: 16384
   split_num: 1500
   model_start_num: ${model_start_num}
@@ -50,25 +51,26 @@ dataset:
   batch_num: 400000
   
 model:
-  name: neus
+  name: nerf
   aabb:
     use_custom_radius: false
-  grid_update_freq: 80
+  grid_update_freq: 100
   grid_resolution: 256 # 128
-  num_samples_per_ray: 256 # 512
+  num_samples_per_ray: 876 # 512
   grid_prune: true
-  use_nerfacc: true
+  use_nerfacc: false
+  dynamic_ray_sampling: true
+  batch_image_sampling: true
   randomized: true
+  ray_chunk: 4096
   dt_gamma: 0.
   fp16: true
   T_thresh: 2e-4
   density_thresh: 10.
-  scale_zoom_up: 1.0 #放大一个块的尺度以实现重叠
-  init_variance: 0.3
-  cos_anneal_end: 5000
+  scale_zoom_up: 1.2 #放大一个块的尺度以实现重叠
   rendering_from_alpha: true
   geometry_network:
-    feature_dim: 13
+    feature_dim: 16
     sdf_activation: none
     sdf_bias: 0.
     grad_type: analytic
@@ -76,18 +78,18 @@ model:
       method: mc
       resolution: 512
       chunk: 2097152
-      threshold: 0.
+      threshold: 1.0
     xyz_encoding_config:
       otype: Grid
       type: Hash
       n_levels: 16
       n_features_per_level: 2
-      log2_hashmap_size: 19 # 大小只影响是否hash冲突
+      log2_hashmap_size: 21 # 大小只影响是否hash冲突
       base_resolution: 16
       
       # per_level_scale: 1.381912879967776 #N_max = 2048
-      per_level_scale: 1.447269237440378 #N_max = 4096
-      # per_level_scale: 1.515716566510398 #N_max = 8192
+      # per_level_scale: 1.447269237440378 #N_max = 4096
+      per_level_scale: 1.515716566510398 #N_max = 8192
       # per_level_scale: 1.5874010519681996 #N_max = 16384
       # per_level_scale: 1.6624757922855755 #N_max = 32768
       # per_level_scale: 1.7411011265922482 #N_max = 65536
@@ -103,7 +105,7 @@ model:
       # weight_norm: true
   color_net:
     name: volume-radiance
-    use_normal: true
+    use_normal: false
     dir_encoding_config:
       # otype: SphericalHarmonics
       # degree: 4    
@@ -118,11 +120,12 @@ model:
     color_activation: sigmoid
   
 system:
-  name: neus-system
+  name: nerf-system
   loss:
+    use_normal: ${model.color_net.use_normal}
     lambda_rgb: 1.
-    lambda_opacity: 0.3
-    lambda_eikonal: 0.2
+    lambda_opacity: 0.2
+    lambda_eikonal: 0.1
     lambda_mask: 0.
   optimizer:
     # name: Adam
@@ -132,20 +135,17 @@ system:
       eps: 1.e-15
     params:
       geometry_network:
-          lr: 3.e-4
+          lr: 6.e-3
       color_net:
-          lr: 3.e-4
-      variance:
-          lr: 2.e-4
+          lr: 6.e-3
   scheduler:
     name: ExponentialLR
     interval: step
     args:
-      step_size: 100
+      step_size: 80
       # gamma: 0.99
       # gamma: 1.01
-      gamma: 0.98
-      # gamma: ${calc_exp_lr_decay_rate:0.1,${trainer.max_steps}}    
+      gamma: 0.99
 
 
 trainer:

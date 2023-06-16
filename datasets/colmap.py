@@ -11,7 +11,7 @@ from load_tool import draw_poses
 from .divide_utils import divideTool
 # RDF2BRU = np.array([[1,0,0],[0,0,-1],[0,1,0]]) @ np.array([[0,0,1],[0,-1,0],[1,0,0]])
 class ColmapDataset(BaseDataset,divideTool):
-    def __init__(self, config,split='train', downsample=1.0, *kwargs):
+    def __init__(self, config,split='train', downsample=1.0):
         super().__init__(config, split, downsample)
         super(BaseDataset,self).__init__(config,split)
         self.read_intrinsics()
@@ -105,11 +105,24 @@ class ColmapDataset(BaseDataset,divideTool):
             self.load_centers()
             self.load_mask()
             self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
-            del self.poses
+            # del self.poses
 
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
             # # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8==0]
             # self.poses = [self.poses[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8==0]
             # self.poses = torch.stack(self.poses)
-            
+        if self.split == 'merge_test':
+            self.load_centers() # colmap尺度下
+            model_idxs=torch.tensor([int(idx) for idx in self.config.merge_modules.split(',')])
+            center = torch.mean(self.centers[model_idxs],dim=0)
+            aabb = torch.concat(\
+            [torch.min(self.aabbs[:,:3],dim=0)[0],
+            torch.max(self.aabbs[:,3:],dim=0)[0],
+            ])
+            # center = self.aabb[:3]+self.aabb[3:]
+            scale = center - aabb[:3]
+            h = (aabb[2]+(aabb[5]-aabb[2])*0.2)
+            self.poses = create_spheric_poses(radius=torch.min(scale[:2])*0.4,mean_h=h,n_poses=80)
+            self.poses[:,:2,3] += center[:2].reshape(1,2)
+            draw_poses(poses_=self.poses,aabb_=aabb[None,...])
         pass

@@ -53,7 +53,8 @@ class NeRFLoss(nn.Module):
         # o = results['opacity'][results['rays_valid']]+1e-10
         # encourage opacity to be either 0 or 1 to avoid floater
         d['opacity'] = self.lambda_opacity*(-o*torch.log(o))*self.config.lambda_opacity
-        d['eikonal']=((torch.linalg.norm(results['grad'], ord=2, dim=-1) - 1.)**2).mean()*self.config.lambda_eikonal
+        if self.config.use_normal:
+            d['eikonal']=((torch.linalg.norm(results['grad'], ord=2, dim=-1) - 1.)**2).mean()*self.config.lambda_eikonal
         if self.lambda_distortion > 0:
             d['distortion'] = self.lambda_distortion * \
                 DistortionLoss.apply(results['ws'], results['deltas'],

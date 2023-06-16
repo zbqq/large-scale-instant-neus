@@ -135,7 +135,7 @@ class BaseDataset(IterableDataset):
         self.mask_name.sort()
         if self.split == 'train':
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8!=0]
-            self.idxs = [i for i in range(0,len(self.idxs)) if i%50!=0]
+            self.idxs = [i for i in range(0,len(self.idxs)) if i%9!=0]
         elif self.split == 'test':
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
             self.idxs = [i for i in range(0,len(self.idxs)) if i%9==0]
@@ -155,6 +155,8 @@ class BaseDataset(IterableDataset):
     def __len__(self):#一个epoch是一个len
         if self.split.startswith('train'):
             return self.config.batch_num#训练一个grid图片数的上限
+        elif self.split == 'merge_test':
+            return self.poses.shape[0]
         return len(self.idxs)
     def __iter__(self):#iterable datasets本身就是一个迭代器，__iter__返回本身，这个
         self.load_mask()
@@ -186,11 +188,16 @@ class BaseDataset(IterableDataset):
                 #     self.idx_tmp += 1
                 #     del item,idx_array,bits_array
                 #     continue
-                true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
-                dirs=self.directions[true_idx]
+                
                 pose_idx = item['pose_idx']
                 img = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False)# w*h 3
+                true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
+                # true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
+                dirs=self.directions[true_idx]
                 rays = img[true_idx.to("cpu")]
+                # t_idx=torch.linalg.norm(rays,dim=-1)>1e-1
+                # rays=rays[t_idx,:]
+                # dirs=dirs[t_idx,:]
                 # del idx_array,true_idx
                 #加载一副图片的interset_pix_idxs            
                 yield {
@@ -200,6 +207,10 @@ class BaseDataset(IterableDataset):
                 }
                 self.idx_tmp += 1
                 self.idx_tmp %= len(self.idx_list)
+        elif self.split == 'merge_test':
+            yield{
+                'poses':self.poses,
+            }
         else:
             
             self.pose_idx = self.idx_list[self.idx_tmp]

@@ -90,7 +90,7 @@ class baseImplicitRep(nn.Module):#都采用grid或plane的方式
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.05)
-                m.bias.data.zero_()
+                # m.bias.data.zero_()
         self.register_buffer('center', center)
         self.register_buffer('scale', scale)
         self.register_buffer('xyz_min', -torch.ones(3)*self.scale + self.center)
@@ -114,19 +114,18 @@ class SDF(baseImplicitRep):
         #         n_output_dims=16,
         #         network_config=self.config["mlp_network_config"]
         #     )
-        self.activation = nn.Softplus(beta=100)
+        self.activation = nn.Softplus(beta=100,threshold=20)
         self.network = nn.Sequential(
-			nn.Linear(self.xyz_encoder.n_output_dims, 64),
-			nn.ReLU(True),
+			nn.Linear(self.xyz_encoder.n_output_dims + 3, 64,bias=False),
+			# nn.ReLU(True),
+			self.activation,
+			# nn.Linear(64, 64),
+			# nn.ReLU(True),
 			# self.activation,
-			nn.Linear(64, 64),
-			nn.ReLU(True),
-			# self.activation,
-			nn.Linear(64, 16)
+			nn.Linear(64, 16,bias=False)
 		)
-
+        pass
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
-        # pts_=pts.clone()
         # pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T).max()
         pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T)
         # with torch.set_grad_enabled(with_grad):#罪魁祸首
@@ -134,7 +133,7 @@ class SDF(baseImplicitRep):
             if with_grad:
                 pts = pts.requires_grad_(True)
             h = self.xyz_encoder(pts).float()
-            h = self.network(h)
+            h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
             sdf = h[:, 0]
             fea = h
             # sdf = sdf * (self.xyz_max.T-self.xyz_min.T).max()
@@ -202,12 +201,15 @@ class vanillaMLP(baseImplicitRep):
             tcnn.Encoding(
                 n_input_dims=3,
                 encoding_config=self.config["xyz_encoding_config"])
-        self.network = nn.Sequential( #density
-			nn.Linear(self.xyz_encoder.n_output_dims, 64),
+        # self.activation = nn.Softplus(beta=100,threshold=20)
+        self.network = nn.Sequential(
+			nn.Linear(self.xyz_encoder.n_output_dims, 128, bias=True),
 			nn.ReLU(True),
+			# self.activation,
 			# nn.Linear(64, 64),
 			# nn.ReLU(True),
-			nn.Linear(64, 16)
+			# self.activation,
+			nn.Linear(128, 16, bias=True)
 		)
 
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
@@ -219,6 +221,8 @@ class vanillaMLP(baseImplicitRep):
             if with_grad:
                 pts = pts.requires_grad_(True)
             h = self.xyz_encoder(pts).float()
+            # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
+            
             h = self.network(h)
             sigma = h[:, 0]
             fea = h
@@ -232,6 +236,8 @@ class vanillaMLP(baseImplicitRep):
                             retain_graph=True, 
                             only_inputs=True
                         )[0]
+                normals = grad/torch.norm(grad,dim=-1).reshape(-1,1)
+                result["normals"]=normals
                 result["grad"]=grad
         return result
      

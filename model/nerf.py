@@ -34,7 +34,7 @@ class vanillaNeRF(baseModule):
         alphas = torch.ones_like(sigma) - torch.exp(- sigma * dists)
 
         return alphas.view(-1,1)
-
+    
     def forward(self,rays_o,rays_d,split):
         if self.config.use_nerfacc:
             sigma_grad_samples=[]
@@ -120,7 +120,7 @@ class vanillaNeRF(baseModule):
 
             return result
         else:  
-            result = self.render(rays_o,rays_d,split=split)
+            result = self.render(rays_o,rays_d,split=split,perturb=True)
             return result
             
             

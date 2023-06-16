@@ -54,7 +54,7 @@ class baseModule(nn.Module):
         
         self.geometry_network.setup(center,scale)
         # self.render_step_size = 1.732 * 2.5 * max(scale)/ self.config.num_samples_per_ray
-        self.render_step_size = 1.732 * 2 * scale[2]/ self.config.num_samples_per_ray *2
+        self.render_step_size = 1.732 * 2 * scale[2]/ self.config.num_samples_per_ray
         # 无人机视角下不包含
         
         self.register_buffer('scene_aabb', \
@@ -105,7 +105,7 @@ class baseModule(nn.Module):
     def render(self,rays_o,rays_d,bg_color=None,perturb=False,cam_near_far=None,shading='full',split='train'):
         rays_o=rays_o.contiguous()
         rays_d=rays_d.contiguous()
-        rays_o-= self.center.view(-1,3)#需要平移到以center为原点坐标系
+        rays_o -= self.center.view(-1,3)#需要平移到以center为原点坐标系
         scene_aabb =self.scene_aabb - self.center.repeat([2])
         device = rays_o.device
         
@@ -115,7 +115,7 @@ class baseModule(nn.Module):
         # )
         aabb = scene_aabb.clone()
         aabb[0:2] -= self.scale[:2]
-        aabb[3:5] += self.scale[:2]
+        aabb[3:5] += self.scale[:2]#扩大一点使得far不会终止到aabb上
 
         nears,fars = near_far_from_aabb(
             rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
@@ -151,26 +151,35 @@ class baseModule(nn.Module):
                 # sigmas,feas = geo_output['sigma'],geo_output['fea']
                 # rgbs = self.color_net(dirs,feas)
                 geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=True)
-                sigmas,feas,normals = geo_output['sigma'],geo_output['fea'],geo_output['grad']
-                # sigmas,feas,normals,grad = geo_output['sigma'],geo_output['fea'],geo_output['normals'],geo_output["grad"]
-                rgbs = self.color_net(dirs,feas)
-                # rgbs = self.color_net(dirs,feas,normals)
+                
+                if self.config.color_net.use_normal:
+                    geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=True)
+                    sigmas,feas,normals,grad = geo_output['sigma'],geo_output['fea'],geo_output['normals'],geo_output["grad"]
+                    # rgbs = self.color_net(dirs,feas)
+                    rgbs = self.color_net(dirs,feas,normals)
+                else:
+                    geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
+                    sigmas,feas = geo_output['sigma'],geo_output['fea']
+                    rgbs = self.color_net(dirs,feas)
 
 
             if self.config.rendering_from_alpha:
-                # alphas = self.get_alpha(sigmas,ts[:,1])
-                alphas = self.get_alpha(sigmas,normals,dirs,ts[:,1])
+                if self.config.color_net.use_normal:
+                    alphas = self.get_alpha(sigmas,normals,dirs,ts[:,1])
+                else:
+                    alphas = self.get_alpha(sigmas,ts[:,1])
                 image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
                 results = {
                     'num_points':xyzs.shape[0],
                     # 'weights':weights,
                     # 'rays_valid':weights_sum>0,
-                    'normals':normals,
                     'opacity':torch.clamp(opacities,1e-12,1000),
                     'num_points':xyzs.shape[0],
-                    # 'grad':grad
+                    
                 }
-            
+                if self.config.color_net.use_normal:
+                    results['normals']=normals
+                    results['grad']=grad
             else:
                 weights, weights_sum, depth, image = \
                     composite_rays_train(sigmas, rgbs, ts, rays, self.config.T_thresh)
@@ -316,6 +325,30 @@ class baseModule(nn.Module):
 
         # print(f'[density grid] min={self.density_grid.min().item():.4f}, max={self.density_grid.max().item():.4f}, mean={self.mean_density:.4f}, occ_rate={(self.density_grid > density_thresh).sum() / (128**3 * self.cascade):.3f}')
         return None
+    def forward_from_pts(self,pts,dirs=None,require_rgb=True):
+        # 给定真实空间中的三维点
+        with torch.cuda.amp.autocast(enabled=self.config.fp16):
+            # geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
+            # sigmas,feas = geo_output['sigma'],geo_output['fea']
+            # rgbs = self.color_net(dirs,feas)
+            geo_output = self.geometry_network(pts,with_fea=True,with_grad=False)
+            
+            if self.config.color_net.use_normal:
+                geo_output = self.geometry_network(pts,with_fea=True,with_grad=False)
+                sigmas,feas = geo_output['sigma'],geo_output['fea']
+                # rgbs = self.color_net(dirs,feas)
+                if require_rgb:
+                    rgbs = self.color_net(dirs,feas,normals)
+                    return sigmas,rgbs
+                return sigmas
+            else:
+                geo_output = self.geometry_network(pts,with_fea=True,with_grad=False)
+                sigmas,feas = geo_output['sigma'],geo_output['fea']
+                
+                if require_rgb:
+                    rgbs = self.color_net(dirs,feas)
+                    return sigmas,rgbs
+                return sigmas
 
         
         

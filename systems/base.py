@@ -195,12 +195,11 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
     def setup(self,stage):
         self.discard_step = 0
-        self.device_ = torch.device("cuda",self.local_rank)
 
         self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=self.config.dataset.downsample)
         self.train_dataset.batch_size = self.config.dataset.batch_size
         
-        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=0.2)
+        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=self.config.dataset.test_downsample)
         
         self.model = MODELS[self.config.model.name](self.config.model)
         self.model.setup(self.train_dataset.centers[self.current_model_num,:],
@@ -274,12 +273,12 @@ class BaseSystem(pl.LightningModule,ImageProcess):
     def test_step(self, batch, batch_idx):        
         raise NotImplementedError
     
-    def test_epoch_end(self, out):
-        """
-        Gather metrics from all devices, compute mean.
-        Purge repeated results using data index.
-        """
-        raise NotImplementedError
+    # def test_epoch_end(self, out):
+    #     """
+    #     Gather metrics from all devices, compute mean.
+    #     Purge repeated results using data index.
+    #     """
+    #     raise NotImplementedError
     
     def save_checkpoint(self,ckpt_name):
         checkpoint = {

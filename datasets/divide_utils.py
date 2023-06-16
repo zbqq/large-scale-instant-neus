@@ -23,6 +23,12 @@ def get_aabb(center:Tensor,scale:Tensor):
         xyz_max
     ],dim=0).squeeze(1)
     return scene_aabb
+def in_aabb(position,aabb):
+    if (position-aabb[:3]>=0).sum()==3 and (position-aabb[3:]<=0).sum()==3:
+        return True
+    else:
+        return False
+    
 class divideTool():
     def __init__(self,config,split='divide'):
         self.config = config
@@ -50,17 +56,17 @@ class divideTool():
         pts = torch.tensor(np.loadtxt(self.new_pts3d_path,usecols=(0,1,2)),dtype=torch.float32)
         cameras_position = self.poses[:,:,3]#[M,3]
 
-        max_position = torch.max(torch.cat([pts,cameras_position]),dim=0)[0]
-        min_position = torch.min(torch.cat([pts,cameras_position]),dim=0)[0]
+        max_position = torch.max(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
+        min_position = torch.min(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
         
         
-        radius = (max_position-min_position)/grid_dim/2
+        radius = (max_position-min_position) / grid_dim / 2
         ranges = max_position - min_position
         offsets = [torch.arange(s) * ranges[i] / s + ranges[i] / (s * 2) for i, s in enumerate(grid_dim)]#每个方格的中心world
         
         # 根据稀疏点云划分grid,meshgrid格式
         centroids = torch.stack((\
-                             torch.ones(grid_dim[0], grid_dim[1])*min_position[0],
+                             torch.ones(grid_dim[0],grid_dim[1])*min_position[0],
                              torch.ones(grid_dim[0],grid_dim[1])*min_position[1],
                              torch.ones(grid_dim[0],grid_dim[1])*min_position[2],
                              )).permute(1,2,0)  #X,Y,Z
@@ -95,8 +101,9 @@ class divideTool():
     def load_centers(self):
         temp = torch.tensor(np.loadtxt(self.centers_and_scales_path),dtype=torch.float32)
         self.centers = temp[...,:3].view(-1,3)
-        self.scales = temp[...,3:].view(-1,3)+torch.tensor([4,4,3]).view(1,3)
-    
+        # self.scales = temp[...,3:].view(-1,3)+torch.tensor([4,4,3]).view(1,3)
+        self.scales = temp[...,3:].view(-1,3)
+        self.aabbs = torch.concat([self.centers-self.scales,self.centers+self.scales],dim=-1)
     def divide(self,grid_dim,mask_type='aabb_intersect'):#从已经得到的sparse pts进行区域的分割，
         """
             
@@ -135,12 +142,11 @@ class divideTool():
         elif mask_type=='aabb_intersect':
             # for i in range(self.config.model_start_num,len(self.grids)):
             for i in range(0,len(self.grids)):
-                grid = self.grids[i]
                 for j in tqdm(range(0,self.poses.shape[0])):
                     rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[j])
                     rays_o = rays_o.to(self.device)
                     rays_d = rays_d.to(self.device)
-                    aabb = grid._roi_aabb.to(self.device)
+                    aabb = self.aabbs[i].to(self.device)
                     t_min,t_max = ray_aabb_intersect(rays_o,rays_d,aabb)
 
                     # intersect_pix_idx = torch.where(t_min<100)[0]#存放
@@ -177,6 +183,27 @@ class divideTool():
                                     "bits_array":bits_array,
                                     "pose_idx":i,
                                     "rays_nums":mask[:,j].sum()
+                                },os.path.join(self.mask_save_path,"{}".format(j),'metadata_{}.pt'.format(i)))  
+        elif mask_type == 'camera_position_mask':
+            for i in tqdm(range(0,self.poses.shape[0])):
+                rays_o,rays_d = get_rays(directions = self.directions,c2w = self.poses[i])
+                rays_o = rays_o.to(self.device)
+                
+
+                for j in range(0,self.centers.shape[0]):
+                    aabb=self.aabbs[j,:].to(self.device)
+                    if in_aabb(position=rays_o[0,:],aabb=aabb):
+                        mask=torch.ones(rays_o.shape[0],device=self.device).to(torch.int32)
+                    else:
+                        mask=torch.zeros(rays_o.shape[0],device=self.device).to(torch.int32)
+                    bits_array = torch.zeros([bits_array_len],dtype=torch.int64).to(self.device)
+                    studio.packbits_u32(mask,bits_array)
+                    bits_array = bits_array.to('cpu')
+                    if (mask > 0).sum() > 4000:
+                        torch.save({
+                                    "bits_array":bits_array,
+                                    "pose_idx":i,
+                                    "rays_nums":mask.sum()
                                 },os.path.join(self.mask_save_path,"{}".format(j),'metadata_{}.pt'.format(i)))  
 
     def get_R_correct(self):

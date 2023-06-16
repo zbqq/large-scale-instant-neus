@@ -9,17 +9,20 @@ import cv2
 import os
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
 
+from skimage.metrics import peak_signal_noise_ratio as psnr
 from datasets.colmap import ColmapDataset
 from model.loss import NeRFLoss
-
+from tqdm import tqdm
 from model.nerf import vanillaNeRF
 from model.neus import NeuS
+from model.merge import mainModule
+
+from systems.base import BaseSystem
 
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 
 from torch.utils.data import DataLoader
-from base import ImageProcess
 from utils.ray_utils import get_rays
 DATASETS={
     'colmap':ColmapDataset
@@ -34,99 +37,85 @@ def load_checkpoint(config,ckpt_path=None):
     system_dict = torch.load(ckpt_path,map_location='cpu')
     model.load_state_dict['model']
     return model
-class mainSystem(pl.LightningModule,ImageProcess):
+class mainSystem(BaseSystem):
     def __init__(self,config):
-        super().__init__(config)#最初的config
-        #init不能将所有的模型都实例化
-        self.model_num = self.config.dataset.grid_X * self.config.dataset.grid_Y
-        self.model_paths=[]
-        if self.model_num> 1:
-            for i in range(0,self.model_num):
-                self.model_paths.append(os.path.join(self.config.save_dir,'{}'.format(i),'{}'.format(self.config.model.name)))
-                # 先实例化不setup不用占多少显存
-            pass
-        else:
-            self.model_paths.append(os.path.join(self.config.save_dir,'0','{}'.format(self.config.model.name)))
-
-        self.current_model_num = self.config.model_start_num # 训练到的第几个模型
-        self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
-    def setup(self,stage):
-
-        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=1.0)
-        models = []
-        for i in range(self.model_paths):
-            _,ckpt_path = load_ckpt_path(os.path.join(self.config.ckpt_dir,
-                            '{}'.format(i),
-                            self.config.model.name)
-                            ) 
-            model = load_checkpoint(self.config,ckpt_path=ckpt_path)
-            models.append(model)
-        self.models = nn.ModuleList(models)
-    def on_train_start(self):
-        # self.model.mark_invisible_cells(self.train_dataset.K.to(self.device),
-        #                                 self.poses,
-        #                                 self.train_dataset.img_wh)
-        pass
-
-    def configure_optimizers(self):
-        
-        self.train_dataset.device = self.device
-        self.register_buffer('directions', self.train_dataset.directions.to(self.device))
-        self.register_buffer('poses', self.train_dataset.poses.to(self.device))
-        self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
-        # opts=[]
-        # for n, p in self.model.named_parameters():
-        #     if n not in ['dR', 'dT']: net_params += [p]
-        
-        # self.net_opt=torch.optim.Adam(net_params, self.config.system.optimizer.args.lr,eps=self.config.system.optimizer.args.eps)
-        # self.net_opt = FusedAdam(net_params, lr=self.config.system.optimizer.lr, eps=self.config.system.optimizer.eps)
+        super().__init__(config)
+        self.config = config
+        self.model_dir = config.save_dir
+        self.model_nums = config.grid_X * config.grid_Y
+        self.model_idxs=[int(idx) for idx in config.merge_modules.split(',')]
         
         
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(self.net_opt,step_size=self.config.system.scheduler.args.step_size,gamma=self.config.system.scheduler.args.gamma)
-        # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.net_opt,gamma=self.config.system.scheduler.args.gamma)
-        
-        # return [self.net_opt],[lr_scheduler]
-        return {
-            "optimizer":self.net_opt,
-            "lr_scheduler":{
-                "scheduler":lr_scheduler,
-                "interval":"step",
-                "frequency": 1,
-                "strict": True,
-                "name": None,
-            }
+    def save_model(self,ckpt_name):
+        ckpt = {
+            'model':self.model.state_dict()
         }
-    def forward(self, batch,split):
-        # poses = batch['pose']
-        poses = self.poses[batch['pose_idx']]
-        dirs = batch['directions']
-        # dirs = self.directions
-        rays_o, rays_d = get_rays(dirs,poses)
-        for i in range(0,len(self.models)):
-            t_min,t_max = ray_aabb_intersect(
-                
-            )
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-    def training_step(self, batch, batch_idx):
-        pass
+        torch.save(ckpt,ckpt_name)
     
+    def setup(self,stage):
+        models=[]
+        for i in self.model_idxs:
+            ckpt_paths = os.listdir(os.path.join(self.model_dir,f'{i}/{self.config.model.name}/ckpts'))
+            model_path = os.path.join(self.model_dir,f'{i}/{self.config.model.name}/ckpts',ckpt_paths[-1])
+            term = torch.load(model_path)        
+            model = term['model']
+            # del model['density_bitfield']
+            # del model['density_grid']
+            x = MODELS[self.config.model.name](config=self.config.model)
+            x.setup(model['center'].cpu(),model['scale'].cpu())
+            x.load_state_dict(model)
+            del x.density_bitfield
+            del x.density_grid
+            models.append(x)
+            del term
+            del model
+            pass
+        self.model = mainModule(config=self.config.model,sub_modules=models)
+        
+        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='merge_test',downsample=0.2)
+        # self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=self.config.dataset.test_downsample)
+        self.register_buffer('poses',self.test_dataset.poses)
+        self.register_buffer('test_directions', self.test_dataset.directions)
+        
+    def forward(self, pose,split):
+        # poses = batch['pose']
+        
+        assert split == 'merge_test'
+        
+        # poses = self.poses[batch['pose_idx']]
+        # pose = batch['pose']
+        # dirs = self.directions
+        rays_o, rays_d = get_rays(self.test_directions,pose)
+        return self.model(rays_o,rays_d,weights_type=None)
 
-    def validation_step(self, batch,batch_idx):
-        output = self(batch)
+    def test_step(self, batch,batch_idx):
+        
+        self.model = self.model.to(self.device)
+        self.model.update_step(5,self.global_step)
+        pbar = tqdm(total=batch['poses'].shape[0])
+        for idx in range(0,batch['poses'].shape[0]):
+            out = self(batch['poses'][idx],split='merge_test')
+
+            prefix = self.config.save_dir + f"/{self.current_model_num}/{self.config.model.name}"
+
+            W, H = self.test_dataset.img_wh
+            rgbs_val = out["rgb"].view(H, W, 3)
+            depth = out['depth'].view(H, W)
+
+            # psnr_ = psnr(rgbs_true.to("cpu").numpy(),rgbs_val.to("cpu").numpy())
+            img_name = os.path.join(prefix,"images",\
+                                    f"merge_{self.config.merge_modules}_{idx}.png"
+                                    )
+            self.save_image_grid(img_name, [
+                # {'type': 'rgb', 'img': rgbs_true, 'kwargs': {'data_format': 'HWC'}},
+                {'type': 'rgb', 'img': rgbs_val, 'kwargs': {'data_format': 'HWC'}},
+                {'type': 'grayscale', 'img': depth, 'kwargs': {}},
+
+                # {'type': 'grayscale', 'img': opacity, 'kwargs': {'cmap': None, 'data_range': (0, 1)}}
+
+            ])
+            pbar.update(1)
+        return None
         
         
         

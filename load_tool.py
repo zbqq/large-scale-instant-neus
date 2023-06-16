@@ -141,7 +141,10 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
     plt.xticks(np.arange(-5, 5, 1))
     plt.yticks(np.arange(-5, 5, 1))
     plt.autoscale(True)
-    plt.show()
+    # plt.show()
+    for i in range(0,10):
+        ax.view_init(elev=6*i-30, azim=i*8)
+        plt.savefig(f'./test{i}.png')
 R_1 = torch.tensor([
 [1.000000000000, 0.000000000000, 0.000000000000 ,0.000000000000],
 [0.000000000000, 0.738635659218, -0.674104869366, 27.879625320435],
