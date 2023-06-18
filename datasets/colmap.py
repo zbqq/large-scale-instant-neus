@@ -124,5 +124,5 @@ class ColmapDataset(BaseDataset,divideTool):
             h = (aabb[2]+(aabb[5]-aabb[2])*0.2)
             self.poses = create_spheric_poses(radius=torch.min(scale[:2])*0.4,mean_h=h,n_poses=80)
             self.poses[:,:2,3] += center[:2].reshape(1,2)
-            draw_poses(poses_=self.poses,aabb_=aabb[None,...])
+            # draw_poses(poses_=self.poses,aabb_=aabb[None,...])
         pass

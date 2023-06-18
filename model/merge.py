@@ -132,7 +132,7 @@ class mainModule(baseModule):
     def forward(self,rays_o,rays_d,weights_type=None,perturb=True):# [N_rays 3] [N_rays,3]
         
         device = rays_o.device
-        
+        fb_ratio = torch.tensor([0.9,0.9,0.9]).to(device)
         N=rays_o.shape[0]
         results = torch.empty(0)
         rays_o = rays_o - self.center.view(-1,3)#需要平移到以center为原点坐标系
@@ -160,7 +160,7 @@ class mainModule(baseModule):
                     rays_o_batch,rays_d_batch,scene_aabb,0.02
                 )
                 xyzs, dirs, ts, rays = \
-                march_rays_train(rays_o_batch, rays_d_batch, self.scale, 
+                march_rays_train(rays_o_batch, rays_d_batch, self.scale, fb_ratio,
                                 True, self.density_bitfield, 
                                 self.C, self.H, 
                                 nears, fars, perturb, 

@@ -10,9 +10,9 @@
             "request": "launch",
             "env": {"CUDA_VISIBLE_DEVICES":"1"},
             // "program": "./merge.py",
-            // "program": "./train.py",
+            "program": "./train.py",
             // "program": "./downsample_and_undistortion.py",
-            "program": "./divide.py",
+            // "program": "./divide.py",
             // "program": "./bin2ply.py",
             
             // "program": "./datasets/datasets.py",

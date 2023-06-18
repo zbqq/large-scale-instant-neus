@@ -132,7 +132,7 @@ class _march_rays_train(torch.autograd.Function):
     """
     @staticmethod
     @custom_fwd(cast_inputs=torch.float32)
-    def forward(ctx, rays_o, rays_d, bound,contract,
+    def forward(ctx, rays_o, rays_d, bound,fb_ratio,contract,
                 density_bitfield, C, H, nears, fars,
                 perturb=False,dt_gamma=0,max_steps=1024):
 
@@ -152,7 +152,7 @@ class _march_rays_train(torch.autograd.Function):
         rays = torch.empty(N, 2, dtype=torch.int32, device=rays_o.device) # id, offset, num_steps
         
         studio.march_rays_train(\
-            rays_o,rays_d,density_bitfield,bound,contract,dt_gamma,
+            rays_o,rays_d,density_bitfield,bound,fb_ratio,contract,dt_gamma,
                 max_steps,
                 N, C, H,
                 nears, fars, 
@@ -166,7 +166,7 @@ class _march_rays_train(torch.autograd.Function):
         ts = torch.zeros(M, 2, dtype=rays_o.dtype, device=rays_o.device)
 
         # second pass: write outputs
-        studio.march_rays_train(rays_o, rays_d, density_bitfield, bound, contract, dt_gamma, max_steps, N, C, H, nears, fars, xyzs, dirs, ts, rays, step_counter, noises)
+        studio.march_rays_train(rays_o, rays_d, density_bitfield, bound, fb_ratio, contract, dt_gamma, max_steps, N, C, H, nears, fars, xyzs, dirs, ts, rays, step_counter, noises)
 
         return xyzs, dirs, ts, rays
     @staticmethod

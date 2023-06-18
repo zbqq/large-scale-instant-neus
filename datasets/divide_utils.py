@@ -97,6 +97,7 @@ class divideTool():
         center_and_scale = torch.stack(center_and_scale)
         self.aabbs = torch.stack(self.aabbs)
         np.savetxt(self.centers_and_scales_path,center_and_scale.numpy())
+        # 原始SFM尺度与坐标
  
     def load_centers(self):
         temp = torch.tensor(np.loadtxt(self.centers_and_scales_path),dtype=torch.float32)
@@ -111,8 +112,8 @@ class divideTool():
         self.gen_centers_from_pts(grid_dim)#存真实的scale
         self.load_centers()#读取
         self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
-        #放缩到2,4,8,...
-        
+        # 放缩到2,4,8,...
+        # draw_poses(poses_=self.poses,aabb_=self.aabbs)
         bits_array_len = math.floor(self.img_wh[0]*self.img_wh[1]/32)
         
         if mask_type == 'mega_nerf_mask':

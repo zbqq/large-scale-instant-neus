@@ -63,8 +63,8 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
             pass
         if len(poses_.shape)<=2:
             poses = poses[None,:,:]
-        for i in range(0,poses.shape[0]):
-        # for i in range(0,poses.shape[0],int(poses.shape[0]/200)):
+        # for i in range(0,poses.shape[0]):
+        for i in range(0,poses.shape[0],int(poses.shape[0]/200)):
             center_camera=poses[i,:3,3:4]
             xyz_camera=center_camera+poses[i,:3,:3]*0.5
             ax.scatter(center_camera[0,0],center_camera[1,0],center_camera[2,0],cmap="Reds")
@@ -83,31 +83,31 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
     if rays_o_ is not None:
         rays_o = rays_o_.to("cpu")
         rays_d = rays_d_.to("cpu")
-        t_max_ = t_max.to("cpu")
-        t_min_ = t_min.to("cpu")
         
         if t_min is not None:
+            t_max_ = t_max.to("cpu")
+            t_min_ = t_min.to("cpu")
             rays = rays_o+rays_d*t_max_.view(-1,1)
             # rays = rays_o+rays_d*t_min_.view(-1,1)
         else:
-            rays = rays_o+rays_d*5
+            rays = rays_o+rays_d*4
         ax.scatter([rays_o[0,0]],[rays_o[0,1]],[rays_o[0,2]],color='r')
         
-        # for i in range(0,rays_d.shape[0],int(rays_d.shape[0]/500)):
+        for i in range(0,rays_d.shape[0],int(rays_d.shape[0]/500)):
         # for i in range(0,rays_d.shape[0]):
-            # ax.plot([rays_o[0,0],rays[i,0]],[rays_o[0,1],rays[i,1]],[rays_o[0,2],rays[i,2]],color='b')
+            ax.plot([rays_o[0,0],rays[i,0]],[rays_o[0,1],rays[i,1]],[rays_o[0,2],rays[i,2]],color='b')
         
         
-        ax.plot([rays_o[0,0],rays[0,0]],[rays_o[0,1],rays[0,1]],[rays_o[0,2],rays[0,2]],color='b')
-        ax.plot([rays_o[0,0],rays[img_wh[0]-1,0]],[rays_o[0,1],rays[img_wh[0]-1,1]],[rays_o[0,2],rays[img_wh[0]-1,2]],color='b')
-        ax.plot([rays_o[0,0],rays[img_wh[0]*(img_wh[1]-1),0]],[rays_o[0,1],rays[img_wh[0]*(img_wh[1]-1),1]],[rays_o[0,2],rays[img_wh[0]*(img_wh[1]-1),2]],color='b')
-        ax.plot([rays_o[0,0],rays[-1,0]],[rays_o[0,1],rays[-1,1]],[rays_o[0,2],rays[-1,2]],color='b')
+        # ax.plot([rays_o[0,0],rays[0,0]],[rays_o[0,1],rays[0,1]],[rays_o[0,2],rays[0,2]],color='b')
+        # ax.plot([rays_o[0,0],rays[img_wh[0]-1,0]],[rays_o[0,1],rays[img_wh[0]-1,1]],[rays_o[0,2],rays[img_wh[0]-1,2]],color='b')
+        # ax.plot([rays_o[0,0],rays[img_wh[0]*(img_wh[1]-1),0]],[rays_o[0,1],rays[img_wh[0]*(img_wh[1]-1),1]],[rays_o[0,2],rays[img_wh[0]*(img_wh[1]-1),2]],color='b')
+        # ax.plot([rays_o[0,0],rays[-1,0]],[rays_o[0,1],rays[-1,1]],[rays_o[0,2],rays[-1,2]],color='b')
             
-        ax.plot([rays[0,0],rays[img_wh[0]-1,0]],[rays[0,1],rays[img_wh[0]-1,1]],[rays[0,2],rays[img_wh[0]-1,2]],color='b')
-        ax.plot([rays[0,0],rays[img_wh[0]*(img_wh[1]-1),0]], [rays[0,1],rays[img_wh[0]*(img_wh[1]-1),1]], [rays[0,2],rays[img_wh[0]*(img_wh[1]-1),2]],color='b')
-        ax.plot([rays[-1,0],rays[img_wh[0]-1,0]],[rays[-1,1],rays[img_wh[0]-1,1]],[rays[-1,2],rays[img_wh[0]-1,2]],color='b')
+        # ax.plot([rays[0,0],rays[img_wh[0]-1,0]],[rays[0,1],rays[img_wh[0]-1,1]],[rays[0,2],rays[img_wh[0]-1,2]],color='b')
+        # ax.plot([rays[0,0],rays[img_wh[0]*(img_wh[1]-1),0]], [rays[0,1],rays[img_wh[0]*(img_wh[1]-1),1]], [rays[0,2],rays[img_wh[0]*(img_wh[1]-1),2]],color='b')
+        # ax.plot([rays[-1,0],rays[img_wh[0]-1,0]],[rays[-1,1],rays[img_wh[0]-1,1]],[rays[-1,2],rays[img_wh[0]-1,2]],color='b')
         
-        ax.plot([rays[-1,0],rays[img_wh[0]*(img_wh[1]-1),0]],[rays[-1,1],rays[img_wh[0]*(img_wh[1]-1),1]],[rays[-1,2],rays[img_wh[0]*(img_wh[1]-1),2]],color='b')
+        # ax.plot([rays[-1,0],rays[img_wh[0]*(img_wh[1]-1),0]],[rays[-1,1],rays[img_wh[0]*(img_wh[1]-1),1]],[rays[-1,2],rays[img_wh[0]*(img_wh[1]-1),2]],color='b')
         
     if aabb_ is not None:
         for i in range(0,aabb_.shape[0]):

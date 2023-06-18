@@ -107,8 +107,10 @@ class baseModule(nn.Module):
         rays_d=rays_d.contiguous()
         rays_o -= self.center.view(-1,3)#需要平移到以center为原点坐标系
         scene_aabb =self.scene_aabb - self.center.repeat([2])
-        device = rays_o.device
         
+        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=scene_aabb[None,...])
+        device = rays_o.device
+        fb_ratio = torch.tensor([0.9,0.9,0.9]).to(device)
         N=rays_o.shape[0]
         # nears,fars = near_far_from_aabb(
         #     rays_o,rays_d,scene_aabb,0.2
@@ -135,7 +137,7 @@ class baseModule(nn.Module):
         # if split=='train':
             # with torch.no_grad():
             xyzs, dirs, ts, rays = \
-                march_rays_train(rays_o, rays_d, self.scale, 
+                march_rays_train(rays_o, rays_d, self.scale, fb_ratio,
                                         True, self.density_bitfield, 
                                         self.C, self.H, 
                                         nears, fars, perturb, 

@@ -19,15 +19,15 @@ mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 10 # 开始从第几个模型训练
+model_start_num: 11 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
 # val_mesh_freq: 1
 val_ckpt_freq: 600
 merge_modules: 5,6,9,10
-# is_continue: false
-is_continue: true
+is_continue: false
+# is_continue: true
 use_DDP: false
 dataset:
   downsample: 0.4 #训练集的图像降采样率

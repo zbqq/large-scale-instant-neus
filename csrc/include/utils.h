@@ -76,6 +76,7 @@ void march_rays_train(
     const at::Tensor rays_d, 
     const at::Tensor grid, 
     const at::Tensor bound, 
+    const at::Tensor fb_ratio,
     const bool contract, 
     const float dt_gamma, 
     const uint32_t max_steps, 
