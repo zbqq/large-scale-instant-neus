@@ -158,3 +158,11 @@ torch::Tensor weight_from_alpha_backward(
 );
 
 torch::Tensor unpack_rays(const torch::Tensor packed_info, const int n_samples);
+
+
+void contract_rect(
+    at::Tensor pts,
+    const at::Tensor bound,
+    const at::Tensor fb_ratio,
+    const uint32_t N
+);

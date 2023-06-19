@@ -132,7 +132,7 @@ class mainModule(baseModule):
     def forward(self,rays_o,rays_d,weights_type=None,perturb=True):# [N_rays 3] [N_rays,3]
         
         device = rays_o.device
-        fb_ratio = torch.tensor([0.9,0.9,0.9]).to(device)
+        fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.fb_ratio
         N=rays_o.shape[0]
         results = torch.empty(0)
         rays_o = rays_o - self.center.view(-1,3)#需要平移到以center为原点坐标系

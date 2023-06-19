@@ -201,11 +201,11 @@ class vanillaMLP(baseImplicitRep):
             tcnn.Encoding(
                 n_input_dims=3,
                 encoding_config=self.config["xyz_encoding_config"])
-        # self.activation = nn.Softplus(beta=100,threshold=20)
+        self.activation = nn.Softplus(beta=100,threshold=20)
         self.network = nn.Sequential(
 			nn.Linear(self.xyz_encoder.n_output_dims, 128, bias=True),
-			nn.ReLU(True),
-			# self.activation,
+			# nn.ReLU(True),
+			self.activation,
 			# nn.Linear(64, 64),
 			# nn.ReLU(True),
 			# self.activation,

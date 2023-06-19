@@ -24,7 +24,7 @@ def get_aabb(center:Tensor,scale:Tensor):
     ],dim=0).squeeze(1)
     return scene_aabb
 def in_aabb(position,aabb):
-    if (position-aabb[:3]>=0).sum()==3 and (position-aabb[3:]<=0).sum()==3:
+    if (position-aabb[:3]>0).sum()==3 and (position-aabb[3:]<0).sum()==3:
         return True
     else:
         return False
@@ -58,11 +58,15 @@ class divideTool():
 
         max_position = torch.max(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
         min_position = torch.min(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
+        # max_position = torch.max(cameras_position,dim=0)[0]
+        # min_position = torch.min(cameras_position,dim=0)[0]
+        max_position[2] = pts[:,2].max()
         
         
-        radius = (max_position-min_position) / grid_dim / 2
+        radius = (max_position-min_position) / grid_dim / 2 # 前景radius
+        radius[2] /= self.config.fb_ratio # 背景radius
         ranges = max_position - min_position
-        offsets = [torch.arange(s) * ranges[i] / s + ranges[i] / (s * 2) for i, s in enumerate(grid_dim)]#每个方格的中心world
+        offsets = [torch.arange(s) * ranges[i] / s + ranges[i] / (s * 2) for i, s in enumerate(grid_dim)]#每个方格的中心world coordinate
         
         # 根据稀疏点云划分grid,meshgrid格式
         centroids = torch.stack((\
@@ -102,7 +106,6 @@ class divideTool():
     def load_centers(self):
         temp = torch.tensor(np.loadtxt(self.centers_and_scales_path),dtype=torch.float32)
         self.centers = temp[...,:3].view(-1,3)
-        # self.scales = temp[...,3:].view(-1,3)+torch.tensor([4,4,3]).view(1,3)
         self.scales = temp[...,3:].view(-1,3)
         self.aabbs = torch.concat([self.centers-self.scales,self.centers+self.scales],dim=-1)
     def divide(self,grid_dim,mask_type='aabb_intersect'):#从已经得到的sparse pts进行区域的分割，
@@ -112,6 +115,10 @@ class divideTool():
         self.gen_centers_from_pts(grid_dim)#存真实的scale
         self.load_centers()#读取
         self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
+        self.scales *= self.config.scale_zoom_up # 让前景有重叠
+        self.fg_scales = self.scales * self.config.fb_ratio
+        self.aabbs = torch.concat([self.centers-self.scales,self.centers+self.scales],dim=-1)
+        self.fg_aabbs = torch.concat([self.centers-self.fg_scales,self.centers+self.fg_scales],dim=-1)
         # 放缩到2,4,8,...
         # draw_poses(poses_=self.poses,aabb_=self.aabbs)
         bits_array_len = math.floor(self.img_wh[0]*self.img_wh[1]/32)
@@ -192,7 +199,8 @@ class divideTool():
                 
 
                 for j in range(0,self.centers.shape[0]):
-                    aabb=self.aabbs[j,:].to(self.device)
+                    aabb=self.fg_aabbs[j,:].to(self.device)
+                    # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.fg_aabbs,aabb_idx = 10,img_wh=self.img_wh)
                     if in_aabb(position=rays_o[0,:],aabb=aabb):
                         mask=torch.ones(rays_o.shape[0],device=self.device).to(torch.int32)
                     else:

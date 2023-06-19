@@ -33,5 +33,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m){
 
     m.def("unpack_rays",&unpack_rays);
 
+    m.def("contract_rect",&contract_rect);
+
+    
+
 }
 

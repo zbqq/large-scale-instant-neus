@@ -111,6 +111,7 @@ class ColmapDataset(BaseDataset,divideTool):
             # # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8==0]
             # self.poses = [self.poses[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8==0]
             # self.poses = torch.stack(self.poses)
+        
         if self.split == 'merge_test':
             self.load_centers() # colmap尺度下
             model_idxs=torch.tensor([int(idx) for idx in self.config.merge_modules.split(',')])

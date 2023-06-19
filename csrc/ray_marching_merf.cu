@@ -160,6 +160,101 @@ void packbits(const at::Tensor grid, const uint32_t N, const float density_thres
     }));
 }
 
+template <typename scalar_t>
+inline __host__ __device__ void __contract_rect(
+    // float * __restrict__ pts,
+    float3& pt,
+    const scalar_t * b3,
+    const scalar_t * fb_ratio
+) {
+    
+    // float3 pt = make_float3(pts[0],pts[1],pts[2]);
+    const float absx = fabsf(pt.x),absy = fabsf(pt.y),absz = fabsf(pt.z);
+    // const float mag_max = fmaxf(absx,fmaxf(absy,absz));
+    float3 mag = make_float3(absx,absy,absz);
+    float factor[3]={b3[0]/b3[1], b3[1]/b3[2], b3[0]/b3[2]};
+    float Linf_x_scale = 1;
+    float Linf_y_scale = 1;
+    float Linf_z_scale = 1;
+
+
+    if (( mag.x > b3[0] * fb_ratio[0]) &&
+                      (mag.x/factor[0] >= mag.y) && 
+                      (mag.x/factor[2] >= mag.z)) {
+        
+        // printf("hello");
+        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.x)) / (mag.x);
+        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.x/factor[0])) / (mag.x/factor[0]);
+        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.x/factor[2])) / (mag.x/factor[2]);
+
+        
+    }
+
+    else if ( (mag.y > b3[1] * fb_ratio[1]) &&
+                           (mag.y >= mag.x/factor[0]) && 
+                           (mag.y/factor[1] >= mag.z)) {
+
+        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.y*factor[0])) / (mag.y*factor[0]);
+        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.y)) / (mag.y);
+        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.y/factor[1])) / (mag.y/factor[1]);
+
+
+    }
+
+    else if ( ( mag.z > b3[2] * fb_ratio[2]) &&
+                           (mag.z >= mag.x/factor[2]) && 
+                           (mag.z >= mag.y/factor[1])) {
+
+        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.z*factor[2])) / (mag.z*factor[2]);
+        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.z*factor[1])) / (mag.z*factor[1]);
+        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.z)) / (mag.z);
+
+    }
+
+    pt.x *= Linf_x_scale;
+    pt.y *= Linf_y_scale;
+    pt.z *= Linf_z_scale;
+}
+
+template <typename scalar_t>
+__global__ void kernel_contract_rect(
+    scalar_t * __restrict__ pts,
+    scalar_t * __restrict__ bound, 
+    scalar_t * __restrict__ fb_ratio,
+    const uint32_t N
+) {
+    const uint32_t n = threadIdx.x + blockIdx.x * blockDim.x;
+    if (n >= N) return;
+    pts += n * 3;
+    // float3 pt = make_float3(pts[0],pts[1],pts[2]);
+    float3 pt = make_float3(pts[0],pts[1],pts[2]);
+    __contract_rect(pt,bound,fb_ratio);
+    pts[0]=pt.x;
+    pts[1]=pt.y;
+    pts[2]=pt.z;
+    
+}
+
+void contract_rect(
+    at::Tensor pts,
+    const at::Tensor bound,
+    const at::Tensor fb_ratio,
+    const uint32_t N
+) {
+    static constexpr uint32_t N_THREAD = 128;
+    CHECK_INPUT(pts);
+    CHECK_INPUT(bound);
+    CHECK_INPUT(fb_ratio);
+    
+    AT_DISPATCH_FLOATING_TYPES(
+        pts.scalar_type(), "kernel_contract_rect", ([&] {
+            kernel_contract_rect<<<div_round_up(N, N_THREAD), N_THREAD>>>(
+                pts.data_ptr<float>(), 
+                bound.data_ptr<float>(), 
+                fb_ratio.data_ptr<float>(),
+                N);
+        }));
+}
 
 
 // rays_o/d: [N, 3]
@@ -285,25 +380,6 @@ void sph_from_ray(const at::Tensor rays_o, const at::Tensor rays_d, const float 
     }));
 }
 
-template <typename scalar_t>
-__global__ void kernel_contraction(
-    const scalar_t * __restrict__ rays_o,
-    const scalar_t * __restrict__ rays_d,  
-    const uint8_t * __restrict__ grid,
-    const scalar_t * __restrict__ bound, 
-    const bool contract,//通过bound确定块的尺度
-    const float dt_gamma, const uint32_t max_steps,
-    const uint32_t N, const uint32_t C, const uint32_t H,
-    const scalar_t* __restrict__ nears, 
-    const scalar_t* __restrict__ fars,
-    scalar_t * xyzs, scalar_t * dirs, scalar_t * ts,//这里是需要记录下来的contraction点
-    int * rays,//[N_rays, 2]
-    int * counter,//[1]
-    const scalar_t* __restrict__ noises
-){
-
-}
-
 
 
 
@@ -341,7 +417,7 @@ __global__ void kernel_march_rays_train(
     rays_o += n * 3;
     rays_d += n * 3;
     rays += n * 2;
-    float3 b3 = make_float3(bound[0],bound[1],bound[2]);
+    // float3 b3 = make_float3(bound[0],bound[1],bound[2]);
     float3 factor = make_float3(fb_ratio[0],fb_ratio[1],fb_ratio[2]);
     uint32_t num_steps = max_steps;
 
@@ -368,7 +444,7 @@ __global__ void kernel_march_rays_train(
     const float noise = noises[n];
 
     // printf("far \n%f",far);
-    const float bound_max = fmaxf(fmaxf(b3.x,b3.y),b3.z);
+    const float bound_max = fmaxf(fmaxf(bound[0],bound[1]),bound[2]);
     const float dt_min = 2 * SQRT3() * bound_max / max_steps;
     const float dt_max = 2 * SQRT3() * bound_max / H;
     // const float dt_max = 1e10f;
@@ -389,10 +465,6 @@ __global__ void kernel_march_rays_train(
         const float y = oy + t * dy;
         const float z = oz + t * dz;
 
-        const float Linf_x_scale = 1;
-        const float Linf_y_scale = 1;
-        const float Linf_z_scale = 1;
-
         float dt = clamp(t * dt_gamma, dt_min, dt_max);
 
         // get mip level
@@ -401,50 +473,16 @@ __global__ void kernel_march_rays_train(
         const float mip_bound = fminf(scalbnf(1.0f, level), bound_max);
         const float mip_rbound = 1 / mip_bound;
 
-        // contraction
-        float cx = x, cy = y, cz = z;
         const float absx = fabsf(x),absy = fabsf(y),absz = fabsf(z);
         // const float mag_max = fmaxf(absx,fmaxf(absy,absz));
         float3 mag = make_float3(absx,absy,absz);
-
-        
-        
-        if (contract && ( mag.x > b3.x * factor.x &&
-                          mag.x/factor.x >= mag.y && 
-                          mag.x/factor.z >= mag.z)) {
-
-            const float Linf_x_scale = (b3.x - b3.x*factor.x * b3.x*(1-factor.x) / (mag.x)) / (mag.x);
-            const float Linf_y_scale = (b3.y - b3.x*factor.x * b3.y*(1-factor.y) / (mag.x/factor.x)) / (mag.x/factor.x);
-            const float Linf_z_scale = (b3.z - b3.x*factor.z * b3.z*(1-factor.z) / (mag.x/factor.z)) / (mag.x/factor.z);
-
-            
+        // contraction
+        float3 pt = make_float3(x,y,z);
+        if(contract){
+            __contract_rect(pt,bound,fb_ratio);
         }
 
-        else if (contract && ( mag.y > b3.y * factor.y &&
-                          mag.y >= mag.x/factor.x && 
-                          mag.y/factor.y >= mag.z)) {
-
-            const float Linf_x_scale = (b3.x - b3.x*factor.x * b3.x*(1-factor.x) / (mag.y*factor.x)) / (mag.y*factor.x);
-            const float Linf_y_scale = (b3.y - b3.x*factor.x * b3.y*(1-factor.y) / (mag.y)) / (mag.y);
-            const float Linf_z_scale = (b3.z - b3.x*factor.z * b3.z*(1-factor.z) / (mag.y/factor.y)) / (mag.y/factor.y);
-
-
-        }
-
-        else if (contract && ( mag.z > b3.z * factor.z &&
-                          mag.z >= mag.x/factor.z && 
-                          mag.z >= mag.y/factor.y)) {
-
-            const float Linf_x_scale = (b3.x - b3.x*factor.x * b3.x*(1-factor.x) / (mag.z*factor.z)) / (mag.z*factor.z);
-            const float Linf_y_scale = (b3.y - b3.x*factor.x * b3.y*(1-factor.y) / (mag.z*factor.y)) / (mag.z*factor.y);
-            const float Linf_z_scale = (b3.z - b3.x*factor.z * b3.z*(1-factor.z) / (mag.z)) / (mag.z);
-
-        }
-
-        cx *= Linf_x_scale;
-        cy *= Linf_y_scale;
-        cz *= Linf_z_scale;
-
+        float cx = pt.x, cy = pt.y, cz = pt.z;
         // convert to nearest grid position
         const int nx = clamp(0.5 * (cx * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
         const int ny = clamp(0.5 * (cy * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
@@ -456,9 +494,10 @@ __global__ void kernel_march_rays_train(
         // if occpuied, advance a small step, and write to output
         // if (n == 0) printf("t=%f density=%f vs thresh=%f step=%d\n", t, density, density_thresh, step);
 
-        if (occ || (contract && (mag.x > b3.x*factor.x || mag.y > b3.y*factor.y || mag.z > b3.z*factor.z))) {
+        if (occ || (contract && (mag.x > bound[0]*fb_ratio[0] || mag.y > bound[1]*fb_ratio[1] || mag.z > bound[2]*fb_ratio[2]))) {
+        //意味着背景区域的点必然会被采样到
         // if (occ) {
-            //意味着背景区域的点必然会被采样到
+            
             step++;
             t += dt;
             if (!first_pass) {
