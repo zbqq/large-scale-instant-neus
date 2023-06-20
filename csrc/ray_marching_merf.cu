@@ -417,7 +417,7 @@ __global__ void kernel_march_rays_train(
     rays_o += n * 3;
     rays_d += n * 3;
     rays += n * 2;
-    // float3 b3 = make_float3(bound[0],bound[1],bound[2]);
+    float3 b3 = make_float3(bound[0],bound[1],bound[2]);
     float3 factor = make_float3(fb_ratio[0],fb_ratio[1],fb_ratio[2]);
     uint32_t num_steps = max_steps;
 
@@ -458,12 +458,12 @@ __global__ void kernel_march_rays_train(
     
     while (t < far && step < num_steps) {
         // current point
-        // const float x = clamp(ox + t * dx, -b3.x, b3.x);//bound default to 2
-        // const float y = clamp(oy + t * dy, -b3.y, b3.y);
-        // const float z = clamp(oz + t * dz, -b3.z, b3.z);
-        const float x = ox + t * dx;
-        const float y = oy + t * dy;
-        const float z = oz + t * dz;
+        const float x = clamp(ox + t * dx, -b3.x, b3.x);//bound default to 2
+        const float y = clamp(oy + t * dy, -b3.y, b3.y);
+        const float z = clamp(oz + t * dz, -b3.z, b3.z);
+        // const float x = ox + t * dx;
+        // const float y = oy + t * dy;
+        // const float z = oz + t * dz;
 
         float dt = clamp(t * dt_gamma, dt_min, dt_max);
 
@@ -472,15 +472,31 @@ __global__ void kernel_march_rays_train(
         //C是cascade，
         const float mip_bound = fminf(scalbnf(1.0f, level), bound_max);
         const float mip_rbound = 1 / mip_bound;
-
+        const float bound_max = fmaxf(fmaxf(b3.x,b3.y),b3.z);
         const float absx = fabsf(x),absy = fabsf(y),absz = fabsf(z);
         // const float mag_max = fmaxf(absx,fmaxf(absy,absz));
         float3 mag = make_float3(absx,absy,absz);
         // contraction
+        // float cx = x, cy = y, cz = z;
         float3 pt = make_float3(x,y,z);
         if(contract){
             __contract_rect(pt,bound,fb_ratio);
         }
+        
+        // if (contract && mag_max > bound_max*0.9) {
+
+
+        //     const float Linf_x_scale = (b3.x - b3.x*0.9 / mag_max) / mag_max;
+        //     const float Linf_y_scale = (b3.y - b3.y*0.9 / mag_max) / mag_max;
+        //     const float Linf_z_scale = (b3.z - b3.z*0.9 / mag_max) / mag_max;
+
+        //     cx *= Linf_x_scale;
+        //     cy *= Linf_y_scale;
+        //     cz *= Linf_z_scale;
+        // }
+
+
+
 
         float cx = pt.x, cy = pt.y, cz = pt.z;
         // convert to nearest grid position

@@ -57,7 +57,7 @@ class baseModule(nn.Module):
         self.C = 1+max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
         self.H = self.config.grid_resolution
         
-        self.geometry_network.setup(center,scale)
+        self.geometry_network.setup(self.center,self.scale)
         # self.render_step_size = 1.732 * 2.5 * max(scale)/ self.config.num_samples_per_ray
         self.render_step_size = 1.732 * 2 * scale[2]/ self.config.num_samples_per_ray
         # 无人机视角下不包含
@@ -118,7 +118,9 @@ class baseModule(nn.Module):
         rays_d=rays_d.contiguous()
         rays_o -= self.center.view(-1,3)#需要平移到以center为原点坐标系
         scene_aabb =self.scene_aabb - self.center.repeat([2])
-        assert in_aabb(rays_o[0,:],scene_aabb)
+        scene_fg_aabb =self.scene_fg_aabb - self.center.repeat([2])
+        
+        assert in_aabb(rays_o[0,:],scene_fg_aabb)
         # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=scene_aabb[None,...])
         device = rays_o.device
         fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.fb_ratio
@@ -149,7 +151,7 @@ class baseModule(nn.Module):
             # with torch.no_grad():
             xyzs, dirs, ts, rays = \
                 march_rays_train(rays_o, rays_d, self.scale, fb_ratio,
-                                        True, self.density_bitfield, 
+                                        False, self.density_bitfield, 
                                         self.C, self.H, 
                                         nears, fars, perturb, 
                                         self.config.dt_gamma, self.config.num_samples_per_ray,)

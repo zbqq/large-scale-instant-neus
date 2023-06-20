@@ -6,8 +6,8 @@ seed: 37
 # case_name: magicSqure
 # case_name: scan65
 # case_name: lego_test
-# case_name: DJI951
-case_name: ObliqueSBY1580
+case_name: DJI951
+# case_name: ObliqueSBY1580
 root_dir: /data3/zzy/data_lab/${case_name}
 # root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
@@ -19,7 +19,7 @@ mask_dir: ${root_dir}/camera_position_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 5 # 开始从第几个模型训练
+model_start_num: 10 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
@@ -42,8 +42,8 @@ dataset:
   # batch_size: 128
   # batch_size: 2048
   # batch_size: 3248
-  # batch_size: 4096
-  batch_size: 8192
+  batch_size: 4096
+  # batch_size: 8192
   # batch_size: 16384
   split_num: 1500
   model_start_num: ${model_start_num}
@@ -57,7 +57,7 @@ model:
   aabb:
     use_custom_radius: false
   use_ray_march: True
-  grid_update_freq: 50
+  grid_update_freq: 80
   grid_resolution: 256 # 128
   num_samples_per_ray: 512 # 512
   grid_prune: true
