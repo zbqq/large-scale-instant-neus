@@ -1,13 +1,13 @@
 
 tag: ''
 
-# seed: 42
-seed: 37
+seed: 42
+# seed: 37
 # case_name: magicSqure
 # case_name: scan65
 # case_name: lego_test
-case_name: DJI951
-# case_name: ObliqueSBY1580
+# case_name: DJI951
+case_name: ObliqueSBY1580
 root_dir: /data3/zzy/data_lab/${case_name}
 # root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
@@ -19,7 +19,7 @@ mask_dir: ${root_dir}/camera_position_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 10 # 开始从第几个模型训练
+model_start_num: 6 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
@@ -32,8 +32,8 @@ use_DDP: false
 dataset:
   downsample: 0.4 #训练集的图像降采样率
   test_downsample: 0.2
-  scale_to: 8 #scale放缩至该绝对尺度
-  scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
+  scale_to: 4 #scale放缩至该绝对尺度
+  scale_zoom_up: 1.0 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
   fb_ratio: 0.9
   use_random: true
   name: colmap
@@ -57,9 +57,9 @@ model:
   aabb:
     use_custom_radius: false
   use_ray_march: True
-  grid_update_freq: 80
+  grid_update_freq: 100
   grid_resolution: 256 # 128
-  num_samples_per_ray: 512 # 512
+  num_samples_per_ray: 376 # 512
   grid_prune: true
   use_nerfacc: false
   dynamic_ray_sampling: true
@@ -69,7 +69,7 @@ model:
   dt_gamma: 0.
   fp16: true
   T_thresh: 2e-4
-  density_thresh: 10.
+  density_thresh: 20.
   scale_zoom_up: ${dataset.scale_zoom_up} #放大一个块的尺度以实现重叠
   fb_ratio: ${dataset.fb_ratio} # 前景半径/背景半径
   rendering_from_alpha: true
@@ -89,12 +89,12 @@ model:
       type: Hash
       n_levels: 16
       n_features_per_level: 2
-      log2_hashmap_size: 21 # 大小只影响是否hash冲突
+      log2_hashmap_size: 20 # 大小只影响是否hash冲突
       base_resolution: 16
       
       # per_level_scale: 1.381912879967776 #N_max = 2048
-      # per_level_scale: 1.447269237440378 #N_max = 4096
-      per_level_scale: 1.515716566510398 #N_max = 8192
+      per_level_scale: 1.447269237440378 #N_max = 4096
+      # per_level_scale: 1.515716566510398 #N_max = 8192
       # per_level_scale: 1.5874010519681996 #N_max = 16384
       # per_level_scale: 1.6624757922855755 #N_max = 32768
       # per_level_scale: 1.7411011265922482 #N_max = 65536

@@ -54,7 +54,7 @@ class baseModule(nn.Module):
         self.register_buffer('center',center)#这是已经scale to的尺度
         self.register_buffer('scale',scale*self.config.scale_zoom_up)
         self.register_buffer('fg_scale',scale*self.config.scale_zoom_up*self.config.fb_ratio)
-        self.C = 1+max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
+        self.C = max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
         self.H = self.config.grid_resolution
         
         self.geometry_network.setup(self.center,self.scale)
@@ -118,9 +118,7 @@ class baseModule(nn.Module):
         rays_d=rays_d.contiguous()
         rays_o -= self.center.view(-1,3)#需要平移到以center为原点坐标系
         scene_aabb =self.scene_aabb - self.center.repeat([2])
-        scene_fg_aabb =self.scene_fg_aabb - self.center.repeat([2])
-        
-        assert in_aabb(rays_o[0,:],scene_fg_aabb)
+        # assert in_aabb(rays_o[0,:],scene_aabb)
         # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=scene_aabb[None,...])
         device = rays_o.device
         fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.fb_ratio
@@ -151,7 +149,7 @@ class baseModule(nn.Module):
             # with torch.no_grad():
             xyzs, dirs, ts, rays = \
                 march_rays_train(rays_o, rays_d, self.scale, fb_ratio,
-                                        False, self.density_bitfield, 
+                                        True, self.density_bitfield, 
                                         self.C, self.H, 
                                         nears, fars, perturb, 
                                         self.config.dt_gamma, self.config.num_samples_per_ray,)
@@ -335,7 +333,7 @@ class baseModule(nn.Module):
         self.iter_density += 1
 
         # convert to bitfield
-        density_thresh = min(self.mean_density*0.99, self.config.density_thresh)
+        density_thresh = min(self.mean_density, self.config.density_thresh)
         self.density_bitfield = packbits(self.density_grid.detach(), density_thresh, self.density_bitfield)
 
         # print(f'[density grid] min={self.density_grid.min().item():.4f}, max={self.density_grid.max().item():.4f}, mean={self.mean_density:.4f}, occ_rate={(self.density_grid > density_thresh).sum() / (128**3 * self.cascade):.3f}')

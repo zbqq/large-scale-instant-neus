@@ -64,7 +64,7 @@ class divideTool():
         
         
         radius = (max_position-min_position) / grid_dim / 2 # 前景radius
-        radius[2] /= self.config.fb_ratio # 背景radius
+        # radius[2] /= self.config.fb_ratio # 背景radius
         ranges = max_position - min_position
         offsets = [torch.arange(s) * ranges[i] / s + ranges[i] / (s * 2) for i, s in enumerate(grid_dim)]#每个方格的中心world coordinate
         

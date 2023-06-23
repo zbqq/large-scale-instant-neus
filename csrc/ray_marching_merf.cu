@@ -170,46 +170,60 @@ inline __host__ __device__ void __contract_rect(
     
     // float3 pt = make_float3(pts[0],pts[1],pts[2]);
     const float absx = fabsf(pt.x),absy = fabsf(pt.y),absz = fabsf(pt.z);
-    // const float mag_max = fmaxf(absx,fmaxf(absy,absz));
+    const float mag_max = fmaxf(absx,fmaxf(absy,absz));
     float3 mag = make_float3(absx,absy,absz);
+    float bound_max=fmaxf(fmaxf(b3[0],b3[1]),b3[2]);
     float factor[3]={b3[0]/b3[1], b3[1]/b3[2], b3[0]/b3[2]};
     float Linf_x_scale = 1;
     float Linf_y_scale = 1;
     float Linf_z_scale = 1;
 
+    if (mag_max > bound_max*0.85) {
+        // L-INF norm
 
-    if (( mag.x > b3[0] * fb_ratio[0]) &&
-                      (mag.x/factor[0] >= mag.y) && 
-                      (mag.x/factor[2] >= mag.z)) {
+        // const float Linf_x_scale = (bound3.x - bound3.x*0.8 / mag_max) / mag_max;
+        // const float Linf_y_scale = (bound3.y - bound3.y*0.8 / mag_max) / mag_max;
+        // const float Linf_z_scale = (bound3.z - bound3.z*0.8 / mag_max) / mag_max;
+
+        const float Linf_x_scale = (b3[0] - b3[0]*0.85 / mag_max) / mag_max;
+        const float Linf_y_scale = (b3[1] - b3[1]*0.85 / mag_max) / mag_max;
+        const float Linf_z_scale = (b3[2] - b3[2]*0.85 / mag_max) / mag_max;
+
+
+    }
+
+    // if (( mag.x > b3[0] * fb_ratio[0]) &&
+    //                   (mag.x/factor[0] >= mag.y) && 
+    //                   (mag.x/factor[2] >= mag.z)) {
         
-        // printf("hello");
-        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.x)) / (mag.x);
-        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.x/factor[0])) / (mag.x/factor[0]);
-        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.x/factor[2])) / (mag.x/factor[2]);
+    //     // printf("hello");
+    //     Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.x)) / (mag.x);
+    //     Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.x/factor[0])) / (mag.x/factor[0]);
+    //     Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.x/factor[2])) / (mag.x/factor[2]);
 
         
-    }
+    // }
 
-    else if ( (mag.y > b3[1] * fb_ratio[1]) &&
-                           (mag.y >= mag.x/factor[0]) && 
-                           (mag.y/factor[1] >= mag.z)) {
+    // else if ( (mag.y > b3[1] * fb_ratio[1]) &&
+    //                        (mag.y >= mag.x/factor[0]) && 
+    //                        (mag.y/factor[1] >= mag.z)) {
 
-        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.y*factor[0])) / (mag.y*factor[0]);
-        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.y)) / (mag.y);
-        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.y/factor[1])) / (mag.y/factor[1]);
+    //     Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.y*factor[0])) / (mag.y*factor[0]);
+    //     Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.y)) / (mag.y);
+    //     Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.y/factor[1])) / (mag.y/factor[1]);
 
 
-    }
+    // }
 
-    else if ( ( mag.z > b3[2] * fb_ratio[2]) &&
-                           (mag.z >= mag.x/factor[2]) && 
-                           (mag.z >= mag.y/factor[1])) {
+    // else if ( ( mag.z > b3[2] * fb_ratio[2]) &&
+    //                        (mag.z >= mag.x/factor[2]) && 
+    //                        (mag.z >= mag.y/factor[1])) {
 
-        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.z*factor[2])) / (mag.z*factor[2]);
-        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.z*factor[1])) / (mag.z*factor[1]);
-        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.z)) / (mag.z);
+    //     Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.z*factor[2])) / (mag.z*factor[2]);
+    //     Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.z*factor[1])) / (mag.z*factor[1]);
+    //     Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.z)) / (mag.z);
 
-    }
+    // }
 
     pt.x *= Linf_x_scale;
     pt.y *= Linf_y_scale;
@@ -472,23 +486,28 @@ __global__ void kernel_march_rays_train(
         //C是cascade，
         const float mip_bound = fminf(scalbnf(1.0f, level), bound_max);
         const float mip_rbound = 1 / mip_bound;
-        const float bound_max = fmaxf(fmaxf(b3.x,b3.y),b3.z);
+
         const float absx = fabsf(x),absy = fabsf(y),absz = fabsf(z);
         // const float mag_max = fmaxf(absx,fmaxf(absy,absz));
         float3 mag = make_float3(absx,absy,absz);
+        float mag_max = fmaxf(fmaxf(absx,absy),absz);
         // contraction
-        // float cx = x, cy = y, cz = z;
         float3 pt = make_float3(x,y,z);
-        if(contract){
-            __contract_rect(pt,bound,fb_ratio);
-        }
-        
-        // if (contract && mag_max > bound_max*0.9) {
+        float cx = x, cy = y, cz = z;
+        // if(contract){
+        //     __contract_rect(pt,bound,fb_ratio);
+        // }
 
+        // if (contract && mag_max > bound_max*0.85) {
+        //     // L-INF norm
 
-        //     const float Linf_x_scale = (b3.x - b3.x*0.9 / mag_max) / mag_max;
-        //     const float Linf_y_scale = (b3.y - b3.y*0.9 / mag_max) / mag_max;
-        //     const float Linf_z_scale = (b3.z - b3.z*0.9 / mag_max) / mag_max;
+        //     // const float Linf_x_scale = (bound3.x - bound3.x*0.8 / mag_max) / mag_max;
+        //     // const float Linf_y_scale = (bound3.y - bound3.y*0.8 / mag_max) / mag_max;
+        //     // const float Linf_z_scale = (bound3.z - bound3.z*0.8 / mag_max) / mag_max;
+
+        //     float Linf_x_scale = (b3.x - b3.x*0.85 / mag_max) / mag_max;
+        //     float Linf_y_scale = (b3.y - b3.y*0.85 / mag_max) / mag_max;
+        //     float Linf_z_scale = (b3.z - b3.z*0.85 / mag_max) / mag_max;
 
         //     cx *= Linf_x_scale;
         //     cy *= Linf_y_scale;
@@ -496,9 +515,7 @@ __global__ void kernel_march_rays_train(
         // }
 
 
-
-
-        float cx = pt.x, cy = pt.y, cz = pt.z;
+        // float cx = pt.x, cy = pt.y, cz = pt.z;
         // convert to nearest grid position
         const int nx = clamp(0.5 * (cx * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
         const int ny = clamp(0.5 * (cy * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
@@ -510,9 +527,10 @@ __global__ void kernel_march_rays_train(
         // if occpuied, advance a small step, and write to output
         // if (n == 0) printf("t=%f density=%f vs thresh=%f step=%d\n", t, density, density_thresh, step);
 
-        if (occ || (contract && (mag.x > bound[0]*fb_ratio[0] || mag.y > bound[1]*fb_ratio[1] || mag.z > bound[2]*fb_ratio[2]))) {
+        // if (occ || (contract && (mag.x > bound[0]*fb_ratio[0] || mag.y > bound[1]*fb_ratio[1] || mag.z > bound[2]*fb_ratio[2]))) {
+        // if (occ || mag_max > 1) {
         //意味着背景区域的点必然会被采样到
-        // if (occ) {
+        if (occ) {
             
             step++;
             t += dt;

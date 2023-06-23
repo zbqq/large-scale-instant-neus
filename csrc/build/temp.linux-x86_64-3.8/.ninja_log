@@ -1,7 +1,8 @@
 # ninja log v5
-0	27093	1687273764784131431	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
-0	45495	1687273783196398216	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o	ca7cc3cb3a2d8621
-0	47847	1687273785544432326	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/pack.o	df2d66da32b853b8
-1	47937	1687273785632433605	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/rendering_W.o	98c9a14b245d3ef8
-1	48102	1687273785800436046	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/rendering_T.o	38fbd9a73ce97ed3
-1	41272	1687273937446676934	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
+0	23199	1687504946006564264	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/binding.o	b57f8dd22cfef9fd
+0	37621	1687504960434781414	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/divide_mask.o	ca7cc3cb3a2d8621
+1	40363	1687504963174822708	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/pack.o	df2d66da32b853b8
+2	40487	1687504963302824637	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/rendering_T.o	38fbd9a73ce97ed3
+1	40719	1687504963530828074	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/rendering_W.o	98c9a14b245d3ef8
+3	33311	1687505019423674109	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
+2	33849	1687512529373333699	/home/zzy/engineer/git_test/large-scale-instant-neus/csrc/build/temp.linux-x86_64-3.8/ray_marching_merf.o	fdf40a06afec6a9c
