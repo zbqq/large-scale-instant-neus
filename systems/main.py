@@ -86,7 +86,7 @@ class mainSystem(BaseSystem):
         # pose = batch['pose']
         # dirs = self.directions
         rays_o, rays_d = get_rays(self.test_directions,pose)
-        return self.model(rays_o,rays_d,weights_type=None)
+        return self.model(rays_o,rays_d,weights_type="UW")
 
     def test_step(self, batch,batch_idx):
         

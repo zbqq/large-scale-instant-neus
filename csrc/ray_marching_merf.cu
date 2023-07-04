@@ -178,52 +178,52 @@ inline __host__ __device__ void __contract_rect(
     float Linf_y_scale = 1;
     float Linf_z_scale = 1;
 
-    if (mag_max > bound_max*0.85) {
-        // L-INF norm
+    // if (mag_max > bound_max*0.85) {
+    //     // L-INF norm
 
-        // const float Linf_x_scale = (bound3.x - bound3.x*0.8 / mag_max) / mag_max;
-        // const float Linf_y_scale = (bound3.y - bound3.y*0.8 / mag_max) / mag_max;
-        // const float Linf_z_scale = (bound3.z - bound3.z*0.8 / mag_max) / mag_max;
+    //     // Linf_x_scale = (bound3.x - bound3.x*0.8 / mag_max) / mag_max;
+    //     // Linf_y_scale = (bound3.y - bound3.y*0.8 / mag_max) / mag_max;
+    //     // Linf_z_scale = (bound3.z - bound3.z*0.8 / mag_max) / mag_max;
 
-        const float Linf_x_scale = (b3[0] - b3[0]*0.85 / mag_max) / mag_max;
-        const float Linf_y_scale = (b3[1] - b3[1]*0.85 / mag_max) / mag_max;
-        const float Linf_z_scale = (b3[2] - b3[2]*0.85 / mag_max) / mag_max;
+    //     Linf_x_scale = (b3[0] - b3[0]*0.85 / mag_max) / mag_max;
+    //     Linf_y_scale = (b3[1] - b3[1]*0.85 / mag_max) / mag_max;
+    //     Linf_z_scale = (b3[2] - b3[2]*0.85 / mag_max) / mag_max;
+
+
+    // }
+
+    if (( mag.x > b3[0] * fb_ratio[0]) &&
+                      (mag.x/factor[0] >= mag.y) && 
+                      (mag.x/factor[2] >= mag.z)) {
+        
+        // printf("hello");
+        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.x)) / (mag.x);
+        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.x/factor[0])) / (mag.x/factor[0]);
+        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.x/factor[2])) / (mag.x/factor[2]);
+
+        
+    }
+
+    else if ( (mag.y > b3[1] * fb_ratio[1]) &&
+                           (mag.y >= mag.x/factor[0]) && 
+                           (mag.y/factor[1] >= mag.z)) {
+
+        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.y*factor[0])) / (mag.y*factor[0]);
+        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.y)) / (mag.y);
+        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.y/factor[1])) / (mag.y/factor[1]);
 
 
     }
 
-    // if (( mag.x > b3[0] * fb_ratio[0]) &&
-    //                   (mag.x/factor[0] >= mag.y) && 
-    //                   (mag.x/factor[2] >= mag.z)) {
-        
-    //     // printf("hello");
-    //     Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.x)) / (mag.x);
-    //     Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.x/factor[0])) / (mag.x/factor[0]);
-    //     Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.x/factor[2])) / (mag.x/factor[2]);
+    else if ( ( mag.z > b3[2] * fb_ratio[2]) &&
+                           (mag.z >= mag.x/factor[2]) && 
+                           (mag.z >= mag.y/factor[1])) {
 
-        
-    // }
+        Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.z*factor[2])) / (mag.z*factor[2]);
+        Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.z*factor[1])) / (mag.z*factor[1]);
+        Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.z)) / (mag.z);
 
-    // else if ( (mag.y > b3[1] * fb_ratio[1]) &&
-    //                        (mag.y >= mag.x/factor[0]) && 
-    //                        (mag.y/factor[1] >= mag.z)) {
-
-    //     Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.y*factor[0])) / (mag.y*factor[0]);
-    //     Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.y)) / (mag.y);
-    //     Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.y/factor[1])) / (mag.y/factor[1]);
-
-
-    // }
-
-    // else if ( ( mag.z > b3[2] * fb_ratio[2]) &&
-    //                        (mag.z >= mag.x/factor[2]) && 
-    //                        (mag.z >= mag.y/factor[1])) {
-
-    //     Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.z*factor[2])) / (mag.z*factor[2]);
-    //     Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.z*factor[1])) / (mag.z*factor[1]);
-    //     Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.z)) / (mag.z);
-
-    // }
+    }
 
     pt.x *= Linf_x_scale;
     pt.y *= Linf_y_scale;
@@ -403,6 +403,25 @@ void sph_from_ray(const at::Tensor rays_o, const at::Tensor rays_d, const float 
 // dirs: [M, 3]
 // rays: [N, 3], idx, offset, num_steps
 
+inline __device__ bool in_aabb(
+    const float3 pt_mag,
+    const float3 fg_bound
+) {
+    if(pt_mag.x<=fg_bound.x && 
+       pt_mag.y<=fg_bound.y && 
+       pt_mag.z<=fg_bound.z)
+       return true;
+    return false;
+}
+
+template <typename scalar_t>
+__global__ void kernel_inverse_cdf_sample(
+
+) {
+
+}
+
+
 template <typename scalar_t>
 __global__ void kernel_march_rays_train(
     const scalar_t * __restrict__ rays_o,
@@ -432,6 +451,7 @@ __global__ void kernel_march_rays_train(
     rays_d += n * 3;
     rays += n * 2;
     float3 b3 = make_float3(bound[0],bound[1],bound[2]);
+    float3 b3_fg = make_float3(bound[0]*fb_ratio[0],bound[1]*fb_ratio[1],bound[2]*fb_ratio[2]);
     float3 factor = make_float3(fb_ratio[0],fb_ratio[1],fb_ratio[2]);
     uint32_t num_steps = max_steps;
 
@@ -467,20 +487,23 @@ __global__ void kernel_march_rays_train(
     t0 += clamp(t0 * dt_gamma, dt_min, dt_max) * noise;
     float t = t0;
     uint32_t step = 0;
+    bool intersected = false;//从相机到grid前景的这一段不用contract
 
     //if (t < far) printf("valid ray %d t=%f near=%f far=%f \n", n, t, near, far);
     
     while (t < far && step < num_steps) {
         // current point
-        const float x = clamp(ox + t * dx, -b3.x, b3.x);//bound default to 2
-        const float y = clamp(oy + t * dy, -b3.y, b3.y);
-        const float z = clamp(oz + t * dz, -b3.z, b3.z);
-        // const float x = ox + t * dx;
-        // const float y = oy + t * dy;
-        // const float z = oz + t * dz;
+        // const float x = clamp(ox + t * dx, -b3.x, b3.x);//bound default to 2
+        // const float y = clamp(oy + t * dy, -b3.y, b3.y);
+        // const float z = clamp(oz + t * dz, -b3.z, b3.z);
+        const float x = ox + t * dx;
+        const float y = oy + t * dy;
+        const float z = oz + t * dz;
+        float3 pt = make_float3(x,y,z);
 
         float dt = clamp(t * dt_gamma, dt_min, dt_max);
-
+        if(!intersected)
+            intersected = in_aabb(pt,b3_fg);
         // get mip level
         const int level = max(mip_from_pos(x, y, z, C), mip_from_dt(dt, H, C)); // range in [0, C - 1]
         //C是cascade，
@@ -492,11 +515,11 @@ __global__ void kernel_march_rays_train(
         float3 mag = make_float3(absx,absy,absz);
         float mag_max = fmaxf(fmaxf(absx,absy),absz);
         // contraction
-        float3 pt = make_float3(x,y,z);
-        float cx = x, cy = y, cz = z;
-        // if(contract){
-        //     __contract_rect(pt,bound,fb_ratio);
-        // }
+        // float cx = x, cy = y, cz = z;
+        
+        if(contract && intersected){
+            __contract_rect(pt,bound,fb_ratio);
+        }
 
         // if (contract && mag_max > bound_max*0.85) {
         //     // L-INF norm
@@ -515,7 +538,7 @@ __global__ void kernel_march_rays_train(
         // }
 
 
-        // float cx = pt.x, cy = pt.y, cz = pt.z;
+        float cx = pt.x, cy = pt.y, cz = pt.z;
         // convert to nearest grid position
         const int nx = clamp(0.5 * (cx * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
         const int ny = clamp(0.5 * (cy * mip_rbound + 1) * H, 0.0f, (float)(H - 1));
@@ -528,7 +551,7 @@ __global__ void kernel_march_rays_train(
         // if (n == 0) printf("t=%f density=%f vs thresh=%f step=%d\n", t, density, density_thresh, step);
 
         // if (occ || (contract && (mag.x > bound[0]*fb_ratio[0] || mag.y > bound[1]*fb_ratio[1] || mag.z > bound[2]*fb_ratio[2]))) {
-        // if (occ || mag_max > 1) {
+        // if (occ || mag_max > 0.1) {
         //意味着背景区域的点必然会被采样到
         if (occ) {
             

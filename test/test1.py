@@ -155,6 +155,120 @@ def run(rank,world_size):
     
 if __name__ == '__main__':
     pass
+    # 一维
+    # import matplotlib.pyplot as plt
+    # N = 500
+    # scale = 50
+    # b_bg = 20
+    # b_fg = 15
+    # y = np.arange(N)/N * scale
+    # x = y.copy()
+    # def warp(x,b_bg,b_fg):
+    #     for i in range(0,x.shape[0]):
+    #         if x[i]>b_fg:
+    #             Linf = (b_bg - b_fg/x[i]*(b_bg-b_fg))/np.abs(x[i])
+    #             # Linf = (b_bg - b_fg/x[i])/np.abs(x[i])
+    #             x[i] *= Linf
+    #     return x
+    # y = warp(y,b_bg,b_fg)
+    # plt.plot(x,y)
+    # plt.show()
+    
+    # 二维
+    # import numpy as np
+    # import matplotlib.pyplot as plt
+    # N = 50
+    # scale = [60,120]
+    # b_bg = np.array([20,40])
+    # # b_fg = [15,22.5]
+    # b_fg = b_bg * 0.7
+    # x = np.arange(N)/N * scale[0] - scale[0]/2
+    # y = np.arange(N)/N * scale[1] - scale[1]/2
+    # X,Y=np.meshgrid(x,y)
+    # pts = np.concatenate([X[...,None],Y[...,None]],-1).reshape(-1,2)
+    # def warp(pts,b_bg,b_fg):
+    #     factor = b_fg[0]/b_fg[1]
+    #     for i in range(0,pts.shape[0]):
+    #         mag = np.abs((pts[i,:]))
+    #         Linf_x=1
+    #         Linf_y=1
+    #         if mag[1] <= mag[0]/factor and mag[0] > b_fg[0]:
+    #             Linf_x = (b_bg[0] - b_fg[0]/mag[0]*(b_bg[0]-b_fg[0]))/mag[0]
+    #             Linf_y = (b_bg[1] - b_fg[1]/(mag[0]/factor)*(b_bg[1]-b_fg[1]))/(mag[0]/factor)
+    #             pts[i,0] *= Linf_x
+    #             pts[i,1] *= Linf_y
+    #         elif mag[1] >= b_fg[1] and mag[0]/factor < mag[1]:
+    #             Linf_x = (b_bg[0] - b_fg[0]/(mag[1]*factor)*(b_bg[0]-b_fg[0]))/(mag[1]*factor)
+    #             Linf_y = (b_bg[1] - b_fg[1]/mag[1]*(b_bg[1]-b_fg[1]))/mag[1]
+    #             pts[i,0] *= Linf_x
+    #             pts[i,1] *= Linf_y
+    #     return pts
+    # pts_ = warp(pts,b_bg,b_fg)
+    # plt.scatter(pts[:,0],pts[:,1])
+    # plt.show()
+
+    # 三维
+    import numpy as np
+    import matplotlib.pyplot as plt
+    N = 20
+    scale = [100,150,50]
+    b_bg = torch.tensor([20,30,10],dtype=torch.float32).cuda()
+    fb_ratio = torch.ones([3],dtype=torch.float32).cuda()*0.1
+    b_fg = b_bg * fb_ratio
+    factor=torch.tensor([b_fg[0]/b_fg[1],b_fg[1]/b_fg[2],b_fg[0]/b_fg[2]]).cuda()
+    # b_fg = b_bg * 0.7
+    x = np.arange(N)/N * scale[0] - scale[0]/2
+    y = np.arange(N)/N * scale[1] - scale[1]/2
+    z = np.arange(N)/N * scale[2] - scale[2]/2
+    
+    # x = np.arange(N)/N * scale[0]/2
+    # y = np.arange(N)/N * scale[1]/2
+    # z = np.arange(N)/N * scale[2]/2
+    X,Y,Z=np.meshgrid(x,y,z)
+    pts = torch.tensor(np.concatenate([X[...,None],Y[...,None],Z[...,None]],-1).reshape(-1,3),dtype=torch.float32).cuda()
+    # pts = pts + torch.rand_like(pts).cuda()
+    # pts=np.array([[32,33,30]])
+    # def warp(pts,b_bg,b_fg):
+    #     factor=[b_fg[0]/b_fg[1],b_fg[1]/b_fg[2],b_fg[0]/b_fg[2]]
+        
+    #     for i in range(0,pts.shape[0]):
+    #         mag = np.abs((pts[i,:]))
+    #         Linf_x,Linf_y,Linf_z = 1,1,1
+    #         if mag[0] >= b_fg[0] and \
+    #            mag[0]/factor[0] >= mag[1] and\
+    #            mag[0]/factor[2] >= mag[2]:
+    #             Linf_x = (b_bg[0] - b_fg[0]/mag[0]*(b_bg[0]-b_fg[0])) / mag[0]
+    #             Linf_y = (b_bg[1] - b_fg[1]/(mag[0]/factor[0])*(b_bg[1]-b_fg[1])) / (mag[0]/factor[0])
+    #             Linf_z = (b_bg[2] - b_fg[2]/(mag[0]/factor[2])*(b_bg[2]-b_fg[2])) / (mag[0]/factor[2])
+                
+    #         elif mag[1] >= b_fg[1] and \
+    #              mag[1] >= mag[0]/factor[0] and \
+    #              mag[1]/factor[1] >= mag[2]:
+    #             Linf_x = (b_bg[0] - b_fg[0]/(mag[1]*factor[0])*(b_bg[0]-b_fg[0]))/(mag[1]*factor[0])
+    #             Linf_y = (b_bg[1] - b_fg[1]/(mag[1])*(b_bg[1]-b_fg[1]))/(mag[1])
+    #             Linf_z = (b_bg[2] - b_fg[2]/(mag[1]/factor[1])*(b_bg[2]-b_fg[2]))/(mag[1]/factor[1])
+                
+    #         elif mag[2] >= b_fg[2] and \
+    #              mag[2] >= mag[0]/factor[2] and \
+    #              mag[2] >= mag[1]/factor[1]:
+    #             Linf_x = (b_bg[0] - b_fg[0]/(mag[2]*factor[2])*(b_bg[0]-b_fg[0]))/(mag[2]*factor[2])
+    #             Linf_y = (b_bg[1] - b_fg[1]/(mag[2]*factor[1])*(b_bg[1]-b_fg[1]))/(mag[2]*factor[1])
+    #             Linf_z = (b_bg[2] - b_fg[2]/(mag[2])*(b_bg[2]-b_fg[2]))/(mag[2])
+                
+    #         pts[i,0]*=Linf_x
+    #         pts[i,1]*=Linf_y
+    #         pts[i,2]*=Linf_z
+
+    #     return pts
+    # pts_ = warp(pts,b_bg,b_fg)
+    studio.contract_rect(pts,b_bg,fb_ratio,int(pts.shape[0]))
+    pts = pts.cpu()
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    
+    ax.scatter(pts[:,0],pts[:,1],pts[:,2])
+    plt.show()
+    pass
     # system = testSystem(config =1 ,split=0)
     # trainer = Trainer(max_epochs=10)
     # trainer.fit(system)

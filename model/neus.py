@@ -2,7 +2,7 @@
 import torch 
 import torch.nn.functional as F
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
-from utils.render import render
+
 import torch.nn.functional as F
 import torch
 from .tcnn_nerf import SDF,RenderingNet,VarianceNetwork
@@ -18,7 +18,7 @@ class NeuS(baseModule):
         
         self.geometry_network = SDF(self.config.geometry_network)
         self.variance = VarianceNetwork(self.config.init_variance)
-        self.color_net = RenderingNet(self.config.color_net)
+        self.color_network = RenderingNet(self.config.color_network)
         
         # self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
         
@@ -109,7 +109,7 @@ class NeuS(baseModule):
                 dists = t_ends - t_starts
                 normal = F.normalize(sdf_grad, p=2, dim=-1)
                 alpha = self.get_alpha(sdf, normal, t_dirs, dists)
-                rgb = self.color_net(t_dirs,feature, normal)
+                rgb = self.color_network(t_dirs,feature, normal)
                 return rgb, alpha
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb)
 

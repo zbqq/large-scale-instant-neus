@@ -138,6 +138,7 @@ class ImageProcess():#存储图像
             elif col['type'] == 'grayscale':
                 grayscale_kwargs = self.DEFAULT_GRAYSCALE_KWARGS.copy()
                 grayscale_kwargs.update(col['kwargs'])
+                # cols.append(self.get_grayscale_image_(col['img'], **grayscale_kwargs))
                 cols.append(self.get_grayscale_image_(col['img'], **grayscale_kwargs))
         return np.concatenate(cols, axis=1)
     
@@ -202,12 +203,11 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=self.config.dataset.test_downsample)
         
         self.model = MODELS[self.config.model.name](self.config.model)
-        self.model.setup(self.train_dataset.centers[self.current_model_num,:],
-                         self.train_dataset.scales[self.current_model_num,:])
-        
         self.net_opt = parse_optimizer(self.config.system.optimizer,self.model)
         
         self.loss = NeRFLoss(config=self.config.system.loss,lambda_distortion=0)
+        self.model.setup(self.train_dataset.centers[self.current_model_num,:],
+                             self.train_dataset.scales[self.current_model_num,:])
         if self.config.is_continue:
             _,ckpt_path = load_ckpt_path(os.path.join(self.config.ckpt_dir,
                                         '{}'.format(self.current_model_num),
@@ -281,8 +281,14 @@ class BaseSystem(pl.LightningModule,ImageProcess):
     #     raise NotImplementedError
     
     def save_checkpoint(self,ckpt_name):
+        key_to_save=self.model.state_dict().keys()
+        try:
+            del key_to_save['density_bitfield']
+        except:
+            pass
+        model = {key: self.model.state_dict()[key] for key in key_to_save}
         checkpoint = {
-            'model': self.model.state_dict(),
+            'model': model,
             'optimizer': self.net_opt.state_dict(), #
             'epoch_step': self.global_step + self.discard_step,
             'current_model_num': self.current_model_num,
@@ -291,9 +297,11 @@ class BaseSystem(pl.LightningModule,ImageProcess):
     def load_checkpoint(self,ckpt_path=None):
         if ckpt_path == None: return
         system_dict = torch.load(ckpt_path,map_location='cpu')
+        
         self.current_modle_num = system_dict['current_model_num']
         # self.global_step = system_dict['epoch_step']
-        self.model.load_state_dict(system_dict['model'])
+        # del system_dict['model']['density_bitfield']
+        self.model.load_state_dict(system_dict['model'],strict=False)
         self.net_opt.load_state_dict(system_dict['optimizer'])
         self.discard_step = system_dict['epoch_step']
         

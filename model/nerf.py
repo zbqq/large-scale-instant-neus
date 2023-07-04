@@ -2,7 +2,7 @@
 import torch 
 import torch.nn.functional as F
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
-from utils.render import render
+
 import torch.nn.functional as F
 import torch
 from .tcnn_nerf import vanillaMLP,RenderingNet
@@ -15,7 +15,7 @@ class vanillaNeRF(baseModule):
         self.config = config
     
         self.geometry_network = vanillaMLP(self.config.geometry_network)
-        self.color_net = RenderingNet(self.config.color_net)
+        self.color_network = RenderingNet(self.config.color_network)
         # self.loss = NeRFLoss(lambda_distortion=0)
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
 
@@ -61,7 +61,7 @@ class vanillaNeRF(baseModule):
                 dists = t_ends - t_starts
                 normal = F.normalize(normal, p=2, dim=-1)
                 alpha = self.get_alpha(sigma, dists)
-                rgb = self.color_net(t_dirs,fea, normal)
+                rgb = self.color_network(t_dirs,fea, normal)
                 return rgb, alpha
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb)
             def sigma_fn(t_starts, t_ends, ray_indices):
@@ -79,7 +79,7 @@ class vanillaNeRF(baseModule):
                 positions = t_origins + t_dirs * (t_starts + t_ends) / 2.
                 out = self.geometry_network(positions,with_fea=True, with_grad=False) 
                 density,feature = out['sigma'],out['fea']
-                rgb = self.color_net(t_dirs,feature)
+                rgb = self.color_network(t_dirs,feature)
                 return rgb.to(torch.float32), density[...,None].to(torch.float32)
             with torch.no_grad():#ray_marching过程中不累加nabla
                 t_min,t_max = ray_aabb_intersect(rays_o,rays_d,self.scene_aabb)
@@ -120,7 +120,11 @@ class vanillaNeRF(baseModule):
 
             return result
         else:  
-            result = self.render(rays_o,rays_d,split=split,perturb=True)
+            cam_near = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 0.
+            # cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * torch.norm(self.scale)
+            cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 15
+            cam_near_far = torch.cat([cam_near,cam_far],dim=-1)
+            result = self.render(rays_o,rays_d,cam_near_far=cam_near_far,split=split,perturb=True)
             return result
             
             

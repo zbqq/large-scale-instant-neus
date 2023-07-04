@@ -178,6 +178,8 @@ class BaseDataset(IterableDataset):
             # self.current_model_num += 1
             
             while True: # batch_num由__len__确定
+                # idxx=234
+                # item = torch.load(self.mask_name[idxx])
                 item = torch.load(self.mask_name[self.idx_list[self.idx_tmp]])
                 # idx_array = torch.zeros([self.img_wh[0]*self.img_wh[1]],dtype=torch.int32).to(self.device)
                 # bits_array = item['bits_array'].to(self.device)
@@ -190,6 +192,7 @@ class BaseDataset(IterableDataset):
                 #     continue
                 
                 pose_idx = item['pose_idx']
+                
                 img = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False)# w*h 3
                 true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
                 # true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
@@ -214,6 +217,7 @@ class BaseDataset(IterableDataset):
         else:
             
             self.pose_idx = self.idx_list[self.idx_tmp]
+            # self.pose_idx = 292
             while True:
                 Idx = torch.load(self.mask_name[self.pose_idx])
                 # Idx = torch.load(self.mask_name[0])

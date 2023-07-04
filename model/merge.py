@@ -9,7 +9,7 @@ import numpy as np
 import trimesh
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
 import time
-from utils.render import render
+from utils.render import up_sample,cat_z_vals,get_rays_indices,get_alphas
 import math
 import torch.nn.functional as F
 from omegaconf import OmegaConf
@@ -18,7 +18,7 @@ from torch.cuda.amp import custom_fwd, custom_bwd
 from .custom_functions import TruncExp
 import torch
 from torch import nn
-
+from utils.render import render_from_raymarching,render_from_cdf
 from .tcnn_nerf import SDF,RenderingNet,VarianceNetwork
 from .loss import NeRFLoss
 import tinycudann as tcnn
@@ -70,6 +70,10 @@ class mainModule(baseModule):
                 torch.zeros(self.C, self.H**3))
         else:
             pass
+    def geometry_network(self,xyzs,with_grad = False,with_fea = True):
+        sigmas = self.sigma_rgb_from_pts(xyzs,weights_type='UW',require_rgb=False)
+        return sigmas
+        
     def sigma_rgb_from_pts(self,xyzs,dirs=None,weights_type=None,require_rgb=True):#输入三维点，输出sigma_rgb
         groups_idx = []
         for i,child in enumerate(self.sub_modules):
@@ -105,7 +109,7 @@ class mainModule(baseModule):
                 sigmas = sigmas.view(-1,1)
                 rgbs = torch.empty(0).to(sigmas.device)
             
-            if sigma_rgb.shape[0] == 0: # [N_sample 4]
+            if sigma_rgb.shape[0] == 0: # [N_sample 4] or [N_sample 3]
                 sigma_rgb = \
                     torch.zeros([xyzs.shape[0],rgbs.shape[-1]+sigmas.shape[-1]],device = sigmas.device,dtype=sigmas.dtype)
             
@@ -133,7 +137,7 @@ class mainModule(baseModule):
         
         device = rays_o.device
         fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.fb_ratio
-        N=rays_o.shape[0]
+        N = rays_o.shape[0]
         results = torch.empty(0)
         rays_o = rays_o - self.center.view(-1,3)#需要平移到以center为原点坐标系
         
@@ -146,19 +150,20 @@ class mainModule(baseModule):
         # aabb = scene_aabb.clone()
         # aabb[0:2] -= self.scale[:2]
         # aabb[3:5] += self.scale[:2]#扩大一点使得far不会终止到aabb上
-
-        
+     
         
         final_results=[]
+        
         print('rendering rays batch')
         pbar=tqdm.tqdm(total=len(rays_o))
         for rays_o_batch, rays_d_batch in zip(rays_o, rays_d):
-            # 采样三维点
             
-            if self.config.use_ray_march:
-                nears,fars = near_far_from_aabb(# [N_rays 1]
+            nears,fars = near_far_from_aabb(# [N_rays 1]
                     rays_o_batch,rays_d_batch,scene_aabb,0.02
-                )
+            )
+            # sample 
+            if self.config.use_ray_march: # raymarch 采样
+
                 xyzs, dirs, ts, rays = \
                 march_rays_train(rays_o_batch, rays_d_batch, self.scale, fb_ratio,
                                 True, self.density_bitfield, 
@@ -168,11 +173,39 @@ class mainModule(baseModule):
                 xyzs += self.center.view(-1,3)
                 dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
             
+            else: # 逆CDF采样
+                n_rays,n_samples = rays_o.shape[0],self.config.num_samples_per_ray
+                z_vals = torch.linspace(0.0, 1.0, n_samples,device=device).view(1,-1)
+                z_vals = (nears + (fars - nears)).view(-1,1) * z_vals # [N_samples]
+                with torch.no_grad(): 
+                    sample_dist = (fars - nears).view(-1,1) / n_samples
+
+                    for _ in range(0,self.config.up_sample_steps):
+
+                        z_vals_sample = up_sample(rays_o,rays_d,z_vals,self.config.n_importance,sample_dist,self.geometry_network)
+                        z_vals = cat_z_vals(rays_o,rays_d,z_vals,z_vals_sample)
+
+                xyzs = rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None] # [N_rays, N_samples, 3]
+                xyzs = xyzs.view(-1,3)
+                dirs = rays_d[:,None,:].expand(n_rays,z_vals.shape[1],3).reshape(-1,3)
+                rays = get_rays_indices(z_vals)
+                z_vals = z_vals.view(-1,1)
+                dists = dists.view(-1,1)
+
+                ts = torch.cat([z_vals,dists],dim=-1)
+                
+                
+                
+                pass
+            # volume rendering
             # 计算各采样点是否在grid中或者在重叠区域，并以此计算权重
-            sigma_rgb=self.sigma_rgb_from_pts(xyzs,dirs,weights_type='UW',require_rgb=True)
+            sigma_rgb=self.sigma_rgb_from_pts(xyzs,dirs,weights_type=weights_type,require_rgb=True)
             sigmas,rgbs = sigma_rgb[:,:1],sigma_rgb[:,1:4]
+            
+            
+            
             if self.config.rendering_from_alpha:
-                if self.config.color_net.use_normal:
+                if self.config.color_network.use_normal:
                     alphas = self.get_alpha(sigmas,normals,dirs,ts[:,1])
                 else:
                     alphas = self.get_alpha(sigmas,ts[:,1:2])

@@ -20,8 +20,8 @@ if __name__ == '__main__':
                              config.dataset.grid_Y,
                              1])
     dataset.device = torch.device("cuda:0")
-    # dataset.divide(grid_dim,mask_type='mega_nerf_mask')
-    dataset.divide(grid_dim,mask_type='camera_position_mask')
+    dataset.divide(grid_dim,mask_type='mega_nerf_mask')
+    # dataset.divide(grid_dim,mask_type='camera_position_mask')
     
     # with open(config.dataset.root_dir+'/R_correct.txt','r') as f:
     #     lines = f.readlines()

@@ -9,7 +9,6 @@ import numpy as np
 import trimesh
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
 import time
-from utils.render import render
 import math
 import torch.nn.functional as F
 from omegaconf import OmegaConf
@@ -19,6 +18,7 @@ from .custom_functions import \
     march_rays_train, near_far_from_aabb, composite_rays_train, \
         morton3D, morton3D_invert, packbits,march_rays,composite_rays,\
             rendering_with_alpha
+from utils.render import render_from_cdf,render_from_raymarching
 # import .custom_functions
 import torch
 from torch import nn
@@ -44,7 +44,7 @@ class baseModule(nn.Module):
         # L = 16; F = 2; log2_T = 19; N_min = 16
         # b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
         # self.render_step_size = 1.732 * 2 * self.config.radius_z / self.config.num_samples_per_ray
-        self.iter_density=0
+
         self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
     
     def setup(self,center,scale):#这里的center，scale和divide中的背景aabb一致
@@ -74,7 +74,7 @@ class baseModule(nn.Module):
             self.center + self.fg_scale
             ))
         )
-        if self.config.grid_prune:
+        if self.config.grid_prune and self.config.use_ray_marhcing:
             if self.config.use_nerfacc:
                 self.occupancy_grid = OccupancyGrid(
                     roi_aabb=self.scene_aabb,
@@ -114,145 +114,48 @@ class baseModule(nn.Module):
         }
         
     def render(self,rays_o,rays_d,bg_color=None,perturb=False,cam_near_far=None,shading='full',split='train'):
-        rays_o=rays_o.contiguous()
-        rays_d=rays_d.contiguous()
-        rays_o -= self.center.view(-1,3)#需要平移到以center为原点坐标系
-        scene_aabb =self.scene_aabb - self.center.repeat([2])
-        # assert in_aabb(rays_o[0,:],scene_aabb)
-        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=scene_aabb[None,...])
-        device = rays_o.device
-        fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.fb_ratio
-        N=rays_o.shape[0]
-        # nears,fars = near_far_from_aabb(
-        #     rays_o,rays_d,scene_aabb,0.2
-        # )
-        aabb = scene_aabb.clone()
-        aabb[0:2] -= self.scale[:2]
-        aabb[3:5] += self.scale[:2]#扩大一点使得far不会终止到aabb上
+        rays_o = rays_o.contiguous()
+        rays_d = rays_d.contiguous()
+        aabb = self.scene_aabb.clone()
+        aabb[0:2] -= self.scale[:2] * 10
+        aabb[3:5] += self.scale[:2] * 10#扩大一点使得far不会终止到aabb上
 
-        nears,fars = near_far_from_aabb(
+        nears,fars = near_far_from_aabb( # 位移不改变nears，fars
             rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
         )
-        # fars *= 1.1
         
+        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabb[None,...],t_min=nears,t_max=fars)
+        # fars *= 1.1
+        # valid_idx = fars<20
+        # rays_o = rays_o[valid_idx]
+        # rays_d = rays_d[valid_idx]
+        # nears = nears[valid_idx]
+        # fars = fars[valid_idx]
         if cam_near_far is not None:
-            nears = torch.maximum(nears, cam_near_far[:, 0])
+            nears = torch.minimum(nears, cam_near_far[:, 0])
             fars = torch.minimum(fars, cam_near_far[:, 1])
         
         # mix background color
         if bg_color is None:
             bg_color = 1
         
-        results={}
-        if split=='train' or split == 'val':
-        # if split=='train':
-            # with torch.no_grad():
-            xyzs, dirs, ts, rays = \
-                march_rays_train(rays_o, rays_d, self.scale, fb_ratio,
-                                        True, self.density_bitfield, 
-                                        self.C, self.H, 
-                                        nears, fars, perturb, 
-                                        self.config.dt_gamma, self.config.num_samples_per_ray,)
-                
-            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,pts3d=xyzs.to('cpu'),aabb_=self.scene_aabb[None,...],t_min=nears,t_max=fars)
-            # draw_poses(pts3d=xyzs.to('cpu'),aabb_=self.scene_aabb[None,...],t_min=nears,t_max=fars)
-            
-            xyzs += self.center.view(-1,3)
-            dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
-            with torch.cuda.amp.autocast(enabled=self.config.fp16):
-                # geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
-                # sigmas,feas = geo_output['sigma'],geo_output['fea']
-                # rgbs = self.color_net(dirs,feas)
-                geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=True)
-                
-                if self.config.color_net.use_normal:
-                    geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=True)
-                    sigmas,feas,normals,grad = geo_output['sigma'],geo_output['fea'],geo_output['normals'],geo_output["grad"]
-                    # rgbs = self.color_net(dirs,feas)
-                    rgbs = self.color_net(dirs,feas,normals)
-                else:
-                    geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
-                    sigmas,feas = geo_output['sigma'],geo_output['fea']
-                    rgbs = self.color_net(dirs,feas)
-
-
-            if self.config.rendering_from_alpha:
-                if self.config.color_net.use_normal:
-                    alphas = self.get_alpha(sigmas,normals,dirs,ts[:,1])
-                else:
-                    alphas = self.get_alpha(sigmas,ts[:,1])
-                image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
-                results = {
-                    'num_points':xyzs.shape[0],
-                    # 'weights':weights,
-                    # 'rays_valid':weights_sum>0,
-                    'opacity':torch.clamp(opacities,1e-12,1000),
-                    'num_points':xyzs.shape[0],
-                    
-                }
-                if self.config.color_net.use_normal:
-                    results['normals']=normals
-                    results['grad']=grad
-            else:
-                weights, weights_sum, depth, image = \
-                    composite_rays_train(sigmas, rgbs, ts, rays, self.config.T_thresh)
-            
-                results = {
-                    'num_points':xyzs.shape[0],
-                    'weights':weights,
-                    # 'rays_valid':weights_sum>0,
-                    'opacity':torch.clamp(weights_sum,1e-12,1000),
-                    'num_points':xyzs.shape[0]
-                }
-            # opacity = torch.clamp(weights_sum,1e-12,1000)
-            
-            
-        elif split=='hhh':
-        # elif split=='val':
-            pass
-            dtype = torch.float32
-            weights_sum = torch.zeros(N, dtype=dtype, device=device)
-            depth = torch.zeros(N, dtype=dtype, device=device)
-            image = torch.zeros(N, 3, dtype=dtype, device=device)
-            
-            n_alive = N
-            rays_alive = torch.arange(n_alive, dtype=torch.int32, device=device) # [N]
-            rays_t = nears.clone() # [N]
-
-            step = 0
-        
-            while step < 100:
-                # count alive rays 
-                n_alive = rays_alive.shape[0]
-                
-                # exit loop
-                if n_alive <= 0:
-                    break
-
-                # decide compact_steps
-                n_step = max(min(N // n_alive, 8), 1)
-
-                xyzs, dirs, ts = march_rays(n_alive, n_step, rays_alive, rays_t, rays_o, rays_d, self.scale, True, self.density_bitfield, self.C, self.H, nears, fars, perturb if step == 0 else False, self.config.dt_gamma, self.config.num_samples_per_ray)
-                
-                dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
-                with torch.cuda.amp.autocast(enabled=self.config.fp16):
-                    # outputs = self(xyzs, dirs, shading=shading)
-                    # sigmas = outputs['sigma']
-                    # rgbs = outputs['color']
-                    geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
-                    sigmas,feas = geo_output['sigma'],geo_output['fea']
-                    rgbs = self.color_net(dirs,feas)
-                    
-                composite_rays(n_alive, n_step, rays_alive, rays_t, sigmas, rgbs, ts, weights_sum, depth, image, self.config.T_thresh)
-
-                rays_alive = rays_alive[rays_alive >= 0]
-
-                # print(f'step = {step}, n_step = {n_step}, n_alive = {n_alive}, xyzs: {xyzs.shape}')
-
-                step += n_step
-        
-        results['depth']=depth
-        results['rgb']=image
+        if self.config.use_ray_marhcing:
+            results = render_from_raymarching(
+                rays_o,rays_d,self.center,self.scale,self.density_bitfield,
+                self.C,self.H,nears,fars,self.config,perturb,
+                split=split,
+                geometry_network=self.geometry_network,
+                color_network=self.color_network
+            )
+        else:
+            results = render_from_cdf(
+                rays_o,rays_d,
+                nears,fars,
+                config=self.config,b_bg=aabb,
+                up_sample_steps=self.config.up_sample_steps,
+                geometry_network=self.geometry_network,
+                color_network=self.color_network
+            )    
         return results
     def update_extra_state(self, decay=0.95, S=128,occ_eval_fn=None):
         
@@ -333,7 +236,7 @@ class baseModule(nn.Module):
         self.iter_density += 1
 
         # convert to bitfield
-        density_thresh = min(self.mean_density, self.config.density_thresh)
+        density_thresh = min(self.mean_density*0.99, self.config.density_thresh)
         self.density_bitfield = packbits(self.density_grid.detach(), density_thresh, self.density_bitfield)
 
         # print(f'[density grid] min={self.density_grid.min().item():.4f}, max={self.density_grid.max().item():.4f}, mean={self.mean_density:.4f}, occ_rate={(self.density_grid > density_thresh).sum() / (128**3 * self.cascade):.3f}')
@@ -343,15 +246,15 @@ class baseModule(nn.Module):
         with torch.cuda.amp.autocast(enabled=self.config.fp16):
             # geo_output = self.geometry_network(xyzs,with_fea=True,with_grad=False)
             # sigmas,feas = geo_output['sigma'],geo_output['fea']
-            # rgbs = self.color_net(dirs,feas)
+            # rgbs = self.color_network(dirs,feas)
             geo_output = self.geometry_network(pts,with_fea=True,with_grad=False)
             
-            if self.config.color_net.use_normal:
+            if self.config.color_network.use_normal:
                 geo_output = self.geometry_network(pts,with_fea=True,with_grad=False)
                 sigmas,feas = geo_output['sigma'],geo_output['fea']
-                # rgbs = self.color_net(dirs,feas)
+                # rgbs = self.color_network(dirs,feas)
                 if require_rgb:
-                    rgbs = self.color_net(dirs,feas,normals)
+                    rgbs = self.color_network(dirs,feas,normals)
                     return sigmas,rgbs
                 return sigmas
             else:
@@ -359,7 +262,7 @@ class baseModule(nn.Module):
                 sigmas,feas = geo_output['sigma'],geo_output['fea']
                 
                 if require_rgb:
-                    rgbs = self.color_net(dirs,feas)
+                    rgbs = self.color_network(dirs,feas)
                     return sigmas,rgbs
                 return sigmas
 

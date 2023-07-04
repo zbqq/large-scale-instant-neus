@@ -103,7 +103,7 @@ model:
       n_hidden_layers: 1
       # sphere_init: true
       # weight_norm: true
-  color_net:
+  color_network:
     name: volume-radiance
     use_normal: false
     dir_encoding_config:
@@ -122,7 +122,7 @@ model:
 system:
   name: nerf-system
   loss:
-    use_normal: ${model.color_net.use_normal}
+    use_normal: ${model.color_network.use_normal}
     lambda_rgb: 1.
     lambda_opacity: 0.2
     lambda_eikonal: 0.1
@@ -136,7 +136,7 @@ system:
     params:
       geometry_network:
           lr: 6.e-3
-      color_net:
+      color_network:
           lr: 6.e-3
   scheduler:
     name: ExponentialLR

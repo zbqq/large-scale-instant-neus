@@ -96,6 +96,42 @@ class baseImplicitRep(nn.Module):#都采用grid或plane的方式
         self.register_buffer('xyz_min', -torch.ones(3)*self.scale + self.center)
         self.register_buffer('xyz_max', torch.ones(3)*self.scale + self.center)
         self.register_buffer('half_size', (self.xyz_max-self.xyz_min)/2)
+ 
+    
+class Plane_v7(nn.Module):
+    def __init__(self,config,
+                 desired_resolution=1024,
+                 base_solution=128,
+                 n_levels=4,
+                 ):
+        super(Plane_v7, self).__init__()
+
+        per_level_scale = np.exp2(np.log2(desired_resolution / base_solution) / (int(n_levels) - 1))
+        encoding_2d_config = {
+            "otype": "Grid",
+            "type": "Dense",
+            "n_levels": n_levels,
+            "n_features_per_level": 2,
+            "base_resolution": base_solution,
+            "per_level_scale":per_level_scale,
+        }
+        self.xy = tcnn.Encoding(n_input_dims=2, encoding_config=encoding_2d_config)
+        self.yz = tcnn.Encoding(n_input_dims=2, encoding_config=encoding_2d_config)
+        self.xz = tcnn.Encoding(n_input_dims=2, encoding_config=encoding_2d_config)
+        self.feat_dim = n_levels * 2 *3
+
+    def forward(self, x, bound): # x已经归一化
+        # x = (x + bound) / (2 * bound)  # zyq: map to [0, 1]
+        xy_feat = self.xy(x[:, [0, 1]])
+        yz_feat = self.yz(x[:, [0, 2]])
+        xz_feat = self.xz(x[:, [1, 2]])
+        return torch.cat([xy_feat, yz_feat, xz_feat], dim=-1)
+
+def get_Plane_encoder(config):
+    plane_encoder = Plane_v7(config)
+    plane_feat_dim = plane_encoder.feat_dim
+    return plane_encoder, plane_feat_dim
+
         
         
         
@@ -201,9 +237,14 @@ class vanillaMLP(baseImplicitRep):
             tcnn.Encoding(
                 n_input_dims=3,
                 encoding_config=self.config["xyz_encoding_config"])
+        network_input_dim=self.xyz_encoder.n_output_dims
+        # if self.config.use_plane:
+        #     self.plane_encoder, self.plane_dim = get_Plane_encoder(self.config.plane)
+        #     network_input_dim += self.plane_dim
+        
         self.activation = nn.Softplus(beta=100,threshold=20)
         self.network = nn.Sequential(
-			nn.Linear(self.xyz_encoder.n_output_dims, 128, bias=True),
+			nn.Linear(network_input_dim, 128, bias=True),
 			# nn.ReLU(True),
 			self.activation,
 			# nn.Linear(64, 64),
@@ -211,7 +252,7 @@ class vanillaMLP(baseImplicitRep):
 			# self.activation,
 			nn.Linear(128, 16, bias=True)
 		)
-
+        
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
         
         pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T)
@@ -221,8 +262,10 @@ class vanillaMLP(baseImplicitRep):
             if with_grad:
                 pts = pts.requires_grad_(True)
             h = self.xyz_encoder(pts).float()
+            if self.config.use_plane:
+                plane_fea = self.plane_encoder(pts)
             # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
-            
+                h = torch.cat([h,plane_fea],dim=-1)
             h = self.network(h)
             sigma = h[:, 0]
             fea = h
@@ -241,6 +284,4 @@ class vanillaMLP(baseImplicitRep):
                 result["grad"]=grad
         return result
      
-    
-    
-    
+   
