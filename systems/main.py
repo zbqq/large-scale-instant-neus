@@ -63,9 +63,7 @@ class mainSystem(BaseSystem):
             # del model['density_grid']
             x = MODELS[self.config.model.name](config=self.config.model)
             x.setup(model['center'].cpu(),model['scale'].cpu())
-            x.load_state_dict(model)
-            del x.density_bitfield
-            del x.density_grid
+            x.load_state_dict(model,strict=False)
             models.append(x)
             del term
             del model
@@ -91,12 +89,15 @@ class mainSystem(BaseSystem):
     def test_step(self, batch,batch_idx):
         
         self.model = self.model.to(self.device)
-        self.model.update_step(5,self.global_step)
+        if self.config.model.use_raymarch:
+            self.model.update_step(5,self.global_step)
         pbar = tqdm(total=batch['poses'].shape[0])
+        prefix = self.config.save_dir + f"/merge/{self.config.model.name}"
+        os.makedirs(prefix,exist_ok=True)
         for idx in range(0,batch['poses'].shape[0]):
             out = self(batch['poses'][idx],split='merge_test')
 
-            prefix = self.config.save_dir + f"/{self.current_model_num}/{self.config.model.name}"
+            
 
             W, H = self.test_dataset.img_wh
             rgbs_val = out["rgb"].view(H, W, 3)

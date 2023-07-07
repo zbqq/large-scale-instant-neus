@@ -262,10 +262,10 @@ class vanillaMLP(baseImplicitRep):
             if with_grad:
                 pts = pts.requires_grad_(True)
             h = self.xyz_encoder(pts).float()
-            if self.config.use_plane:
-                plane_fea = self.plane_encoder(pts)
+            # if self.config.use_plane:
+            #     plane_fea = self.plane_encoder(pts)
             # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
-                h = torch.cat([h,plane_fea],dim=-1)
+                # h = torch.cat([h,plane_fea],dim=-1)
             h = self.network(h)
             sigma = h[:, 0]
             fea = h

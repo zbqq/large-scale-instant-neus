@@ -63,8 +63,8 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
             pass
         if len(poses_.shape)<=2:
             poses = poses[None,:,:]
-        # for i in range(0,poses.shape[0]):
-        for i in range(0,poses.shape[0],int(poses.shape[0]/200)):
+        for i in range(0,poses.shape[0]):
+        # for i in range(0,poses.shape[0],int(poses.shape[0]/10)):
             center_camera=poses[i,:3,3:4]
             xyz_camera=center_camera+poses[i,:3,:3]*0.5
             ax.scatter(center_camera[0,0],center_camera[1,0],center_camera[2,0],cmap="Reds")
@@ -78,6 +78,10 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
 
             ax.scatter([center_camera[0,0]],[center_camera[1,0]],[center_camera[2,0]],color='m')
     if pts3d is not None:
+        try:
+            pts3d = pts3d.cpu()
+        except:
+            pass
         for i in range(0,pts3d.shape[0],int(pts3d.shape[0]/300)):
             ax.scatter([pts3d[i,0]],[pts3d[i,1]],[pts3d[i,2]],color='b')
     if rays_o_ is not None:

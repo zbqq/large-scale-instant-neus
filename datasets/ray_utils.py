@@ -209,7 +209,7 @@ def create_spheric_poses(radius, mean_h, n_poses=120):
 
     spheric_poses = []
     for psi in np.linspace(0, 2*np.pi, n_poses+1)[:-1]:
-        spheric_poses += [spheric_pose(0, -np.pi/12,psi, radius)]
+        spheric_poses += [spheric_pose(0, -np.pi/8,psi, radius)]
     return torch.stack(spheric_poses, 0)
     
 def scale_anything(dat, inp_scale, tgt_scale):

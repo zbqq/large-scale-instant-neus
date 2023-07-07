@@ -18,7 +18,7 @@ from torch.cuda.amp import custom_fwd, custom_bwd
 from .custom_functions import TruncExp
 import torch
 from torch import nn
-from utils.render import render_from_raymarching,render_from_cdf
+from utils.render import render_from_raymarch,render_from_cdf
 from .tcnn_nerf import SDF,RenderingNet,VarianceNetwork
 from .loss import NeRFLoss
 import tinycudann as tcnn
@@ -61,7 +61,7 @@ class mainModule(baseModule):
         self.register_buffer('center',(self.scene_aabb[:3]+self.scene_aabb[3:])/2)
         self.register_buffer('scale',self.center - self.scene_aabb[:3])
         
-        if self.config.use_ray_march:
+        if self.config.use_raymarch:
             self.C = 1+max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
             self.H = self.config.grid_resolution
             self.register_buffer('density_bitfield',
@@ -72,16 +72,23 @@ class mainModule(baseModule):
             pass
     def geometry_network(self,xyzs,with_grad = False,with_fea = True):
         sigmas = self.sigma_rgb_from_pts(xyzs,weights_type='UW',require_rgb=False)
-        return sigmas
+        return {
+            'sigma':sigmas.view(-1)
+        }
         
     def sigma_rgb_from_pts(self,xyzs,dirs=None,weights_type=None,require_rgb=True):#输入三维点，输出sigma_rgb
         groups_idx = []
+        # z_zoom_up = torch.tensor([-1.5,-1.5,-3,1.5,1.5,3],device=xyzs.device)
+        z_zoom_up = torch.tensor([0,0,-3,0,0,3],device=xyzs.device)
+        # 相机在外侧观测bbox，因此需要将z轴拉长
         for i,child in enumerate(self.sub_modules):
-            group_idx = in_aabb(xyzs,child.scene_aabb)# [N_samples 1]
+            group_idx = in_aabb(xyzs,child.scene_aabb + z_zoom_up)# [N_samples 1]
+            # group_idx = in_aabb(xyzs,child.scene_aabb)# [N_samples 1]
             groups_idx.append(group_idx)
+            # draw_poses(pts3d=xyzs,aabb_=(child.scene_aabb + z_zoom_up)[None,...])
+            pass
         
         groups_idx = torch.cat(groups_idx,dim=-1) # [N C]
-        
         
         overlap_num = groups_idx.sum(dim=-1) # [N 1]
         assert overlap_num.all()
@@ -99,6 +106,8 @@ class mainModule(baseModule):
         sigma_rgb=torch.empty(0)
         
         for i,child in enumerate(self.sub_modules):
+            if groups_idx[:,i].sum() == 0: # 如果xyzs没有一个在第i个块中，则跳过
+                continue
             if require_rgb:
                 
                 sigmas,rgbs = child.forward_from_pts(xyzs[groups_idx[:,i],:],dirs[groups_idx[:,i],:],require_rgb=True)
@@ -107,8 +116,11 @@ class mainModule(baseModule):
             else:
                 sigmas = child.forward_from_pts(xyzs[groups_idx[:,i],:],require_rgb=False)
                 sigmas = sigmas.view(-1,1)
+                # sigmas = sigmas/sigmas.max()
                 rgbs = torch.empty(0).to(sigmas.device)
             
+                sigmas = sigmas/sigmas.max()
+
             if sigma_rgb.shape[0] == 0: # [N_sample 4] or [N_sample 3]
                 sigma_rgb = \
                     torch.zeros([xyzs.shape[0],rgbs.shape[-1]+sigmas.shape[-1]],device = sigmas.device,dtype=sigmas.dtype)
@@ -139,15 +151,21 @@ class mainModule(baseModule):
         fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.fb_ratio
         N = rays_o.shape[0]
         results = torch.empty(0)
-        rays_o = rays_o - self.center.view(-1,3)#需要平移到以center为原点坐标系
+        scene_aabb =self.scene_aabb.clone()
         
+        aabb = [scene_aabb.clone()]
+        for i,child in enumerate(self.sub_modules):
+            aabb.append(child.scene_aabb)
+        aabb = torch.stack(aabb)
+        # rays_o = rays_o - self.center.view(-1,3)#需要平移到以center为原点坐标系
+        
+        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabb)
         rays_o = rays_o.split(int(rays_o.shape[0]/500))
         rays_d = rays_d.split(int(rays_d.shape[0]/500))
         
-        scene_aabb =self.scene_aabb - self.center.repeat([2])
+        # scene_aabb =self.scene_aabb - self.center.repeat([2])
+
         
-        
-        # aabb = scene_aabb.clone()
         # aabb[0:2] -= self.scale[:2]
         # aabb[3:5] += self.scale[:2]#扩大一点使得far不会终止到aabb上
      
@@ -161,11 +179,14 @@ class mainModule(baseModule):
             nears,fars = near_far_from_aabb(# [N_rays 1]
                     rays_o_batch,rays_d_batch,scene_aabb,0.02
             )
+            # draw_poses(rays_o_=rays_o_batch,rays_d_=rays_d_batch,aabb_=aabb[None,...],t_min=nears,t_max=fars)
+        
             # sample 
-            if self.config.use_ray_march: # raymarch 采样
-
+            if self.config.use_raymarch: # raymarch 采样
+                rays_o_batch_rectified = rays_o_batch - self.center.view(-1,3)
+                # scene_aabb =self.scene_aabb - self.center.repeat([2])
                 xyzs, dirs, ts, rays = \
-                march_rays_train(rays_o_batch, rays_d_batch, self.scale, fb_ratio,
+                march_rays_train(rays_o_batch_rectified, rays_d_batch, self.scale, fb_ratio,
                                 True, self.density_bitfield, 
                                 self.C, self.H, 
                                 nears, fars, perturb, 
@@ -174,7 +195,7 @@ class mainModule(baseModule):
                 dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
             
             else: # 逆CDF采样
-                n_rays,n_samples = rays_o.shape[0],self.config.num_samples_per_ray
+                n_rays,n_samples = rays_o_batch.shape[0],self.config.num_samples_per_ray
                 z_vals = torch.linspace(0.0, 1.0, n_samples,device=device).view(1,-1)
                 z_vals = (nears + (fars - nears)).view(-1,1) * z_vals # [N_samples]
                 with torch.no_grad(): 
@@ -182,12 +203,16 @@ class mainModule(baseModule):
 
                     for _ in range(0,self.config.up_sample_steps):
 
-                        z_vals_sample = up_sample(rays_o,rays_d,z_vals,self.config.n_importance,sample_dist,self.geometry_network)
-                        z_vals = cat_z_vals(rays_o,rays_d,z_vals,z_vals_sample)
+                        z_vals_sample = up_sample(rays_o_batch,rays_d_batch,z_vals,self.config.n_importance,sample_dist,self.geometry_network)
+                        z_vals = cat_z_vals(rays_o_batch,rays_d_batch,z_vals,z_vals_sample)
 
-                xyzs = rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None] # [N_rays, N_samples, 3]
+                xyzs = rays_o_batch[:, None, :] + rays_d_batch[:, None, :] * z_vals[..., :, None] # [N_rays, N_samples, 3]
                 xyzs = xyzs.view(-1,3)
-                dirs = rays_d[:,None,:].expand(n_rays,z_vals.shape[1],3).reshape(-1,3)
+                dists = z_vals[...,1:] - z_vals[...,:-1] # [N_rays,N_samples - 1]    
+                dists = torch.cat([dists, sample_dist.expand(dists[..., :1].shape)], -1).view(-1)
+    
+    
+                dirs = rays_d_batch[:,None,:].expand(n_rays,z_vals.shape[1],3).reshape(-1,3)
                 rays = get_rays_indices(z_vals)
                 z_vals = z_vals.view(-1,1)
                 dists = dists.view(-1,1)

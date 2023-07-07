@@ -56,7 +56,7 @@ model:
   name: nerf
   aabb:
     use_custom_radius: false
-  use_ray_march: True
+  use_raymarch: True
   grid_update_freq: 100
   grid_resolution: 256 # 128
   num_samples_per_ray: 128 # 512
@@ -73,7 +73,7 @@ model:
   scale_zoom_up: ${dataset.scale_zoom_up} #放大一个块的尺度以实现重叠
   fb_ratio: ${dataset.fb_ratio} # 前景半径/背景半径
   rendering_from_alpha: true
-  use_ray_marhcing: False
+  use_raymarch: False
   n_importance: 64
   up_sample_steps: 4
   geometry_network:

@@ -212,7 +212,7 @@ class BaseDataset(IterableDataset):
                 self.idx_tmp %= len(self.idx_list)
         elif self.split == 'merge_test':
             yield{
-                'poses':self.poses,
+                'poses':self.poses_traj,
             }
         else:
             

@@ -10,7 +10,7 @@ from datasets.datasets import BaseDataset
 from load_tool import draw_poses
 from .divide_utils import divideTool
 # RDF2BRU = np.array([[1,0,0],[0,0,-1],[0,1,0]]) @ np.array([[0,0,1],[0,-1,0],[1,0,0]])
-class ColmapDataset(BaseDataset,divideTool):
+class MegaNeRFDataset(BaseDataset,divideTool):
     def __init__(self, config,split='train', downsample=1.0):
         super().__init__(config, split, downsample)
         super(BaseDataset,self).__init__(config,split)
@@ -124,7 +124,7 @@ class ColmapDataset(BaseDataset,divideTool):
             # center = self.aabb[:3]+self.aabb[3:]
             scale = center - aabb[:3]
             h = (aabb[2]+(aabb[5]-aabb[2])*1.2)
-            self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.6,mean_h=h,n_poses=80)
+            self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.4,mean_h=h,n_poses=80)
             self.poses_traj[:,:2,3] += center[:2].reshape(1,2)
             draw_poses(poses_=self.poses_traj,aabb_=aabb[None,...])
         pass

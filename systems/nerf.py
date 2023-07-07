@@ -55,7 +55,7 @@ class NeRFSystem(BaseSystem):
         }
         """
         
-        if self.global_step%self.config.model.grid_update_freq == 0 and self.config.model.use_ray_marhcing :
+        if self.global_step%self.config.model.grid_update_freq == 0 and self.config.model.use_raymarch :
             self.model.update_step(5,self.global_step)
         render_out = self(batch,split='train')
         loss_d = self.loss(render_out, batch)

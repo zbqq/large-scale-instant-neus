@@ -30,6 +30,7 @@ MODELS={
     'neus':NeuS
 } 
 class ImageProcess():#存储图像
+
     @property
     def save_dir(self):
         return self.config.save_dir
@@ -47,7 +48,8 @@ class ImageProcess():#存储图像
     
     DEFAULT_RGB_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1)}
     DEFAULT_UV_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1), 'cmap': 'checkerboard'}
-    DEFAULT_GRAYSCALE_KWARGS = {'data_range': None, 'cmap': 'jet'}
+    # DEFAULT_GRAYSCALE_KWARGS = {'data_range': None, 'cmap': 'jet'}
+    DEFAULT_GRAYSCALE_KWARGS = {'data_range': [0,10], 'cmap': 'jet'}
     def ConcatImg(self,img_val,img_true):#均为numpy格式
         Img = np.concatenate(img_val,img_true)
         return Img
@@ -302,7 +304,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         # self.global_step = system_dict['epoch_step']
         # del system_dict['model']['density_bitfield']
         self.model.load_state_dict(system_dict['model'],strict=False)
-        self.net_opt.load_state_dict(system_dict['optimizer'])
+        # self.net_opt.load_state_dict(system_dict['optimizer'])
         self.discard_step = system_dict['epoch_step']
         
         # pass

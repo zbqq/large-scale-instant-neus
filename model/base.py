@@ -18,7 +18,7 @@ from .custom_functions import \
     march_rays_train, near_far_from_aabb, composite_rays_train, \
         morton3D, morton3D_invert, packbits,march_rays,composite_rays,\
             rendering_with_alpha
-from utils.render import render_from_cdf,render_from_raymarching
+from utils.render import render_from_cdf,render_from_raymarch
 # import .custom_functions
 import torch
 from torch import nn
@@ -74,7 +74,7 @@ class baseModule(nn.Module):
             self.center + self.fg_scale
             ))
         )
-        if self.config.grid_prune and self.config.use_ray_marhcing:
+        if self.config.grid_prune and self.config.use_raymarch:
             if self.config.use_nerfacc:
                 self.occupancy_grid = OccupancyGrid(
                     roi_aabb=self.scene_aabb,
@@ -139,8 +139,8 @@ class baseModule(nn.Module):
         if bg_color is None:
             bg_color = 1
         
-        if self.config.use_ray_marhcing:
-            results = render_from_raymarching(
+        if self.config.use_raymarch:
+            results = render_from_raymarch(
                 rays_o,rays_d,self.center,self.scale,self.density_bitfield,
                 self.C,self.H,nears,fars,self.config,perturb,
                 split=split,

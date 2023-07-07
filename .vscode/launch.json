@@ -8,7 +8,7 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            "env": {"CUDA_VISIBLE_DEVICES":"1"},
+            "env": {"CUDA_VISIBLE_DEVICES":"0"},
             // "program": "./merge.py",
             "program": "./train.py",
             // "program": "./downsample_and_undistortion.py",

@@ -414,12 +414,12 @@ inline __device__ bool in_aabb(
     return false;
 }
 
-template <typename scalar_t>
-__global__ void kernel_inverse_cdf_sample(
+// template <typename scalar_t>
+// __global__ void kernel_inverse_cdf_sample(
 
-) {
+// ) {
 
-}
+// }
 
 
 template <typename scalar_t>

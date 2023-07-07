@@ -117,8 +117,8 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
     plt.yticks(np.arange(-5, 5, 1))
     plt.autoscale(True)
     plt.show()
-from mega_nerf.ray_utils import get_ray_directions
-from mega_nerf.ray_utils import get_rays
+# from mega_nerf.ray_utils import get_ray_directions
+# from mega_nerf.ray_utils import get_rays
 
 
 def read_from_mega_nerf(meta_data_dir,mask_dir,img_idx):

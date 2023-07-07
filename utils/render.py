@@ -57,7 +57,7 @@ def sample_pdf(bins, weights, n_sample_importance, det=False):#64个三维采样
 def up_sample(
     rays_o,rays_d,z_vals,
     n_importance,sample_dist,
-    b_bg,fb_ratio,
+    # b_bg,fb_ratio,
     geometry_network=None):
     assert geometry_network is not None
     pts = (rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None]).view(-1,3) # [N_rays, N_samples, 3]
@@ -116,7 +116,7 @@ def render_from_cdf(\
 
         for _ in range(0,up_sample_steps):
             
-            z_vals_sample = up_sample(rays_o,rays_d,z_vals,n_importance,sample_dist,b_bg,fb_ratio,geometry_network)
+            z_vals_sample = up_sample(rays_o,rays_d,z_vals,n_importance,sample_dist,geometry_network)
             z_vals = cat_z_vals(rays_o,rays_d,z_vals,z_vals_sample)
 
     pts = rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None] # [N_rays, N_samples, 3]
@@ -151,7 +151,7 @@ def render_from_cdf(\
     results['depth']=depth
     results['rgb']=image
     return results
-def render_from_raymarching(\
+def render_from_raymarch(\
     rays_o,rays_d,
     center,scale,density_bitfield,
     C,H,nears,fars,config,perturb,
