@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from kornia import create_meshgrid
 from einops import rearrange
-
+import cv2
 
 @torch.cuda.amp.autocast(dtype=torch.float32)
 def get_ray_directions(H, W, K, device='cpu', random=False, return_uv=False, flatten=True):
@@ -188,4 +188,85 @@ def create_spheric_poses(radius, mean_h, n_poses=120):
         spheric_poses += [spheric_pose(th, -np.pi/12, radius)]
     return np.stack(spheric_poses, 0)
 
+def get_aabb_imgmask(aabb,w2c,K):
+        
+        #     z  ^
+        #        |________
+        #       /|       /|
+        #      /_|_____ / |      y
+        #     |  |_____|__|____>
+        #     | /      | /
+        #   x |/_______|/
+        #     / 
+        #    /  
+        #   <  
+                          
+              
+    P_w2i = K @ w2c # [3,4]
+    up = (P_w2i @ torch.tensor([
+               [aabb[0],aabb[1],aabb[5],1],
+               [aabb[3],aabb[1],aabb[5],1],
+               [aabb[3],aabb[4],aabb[5],1],
+               [aabb[0],aabb[4],aabb[5],1]]).T).T
+    
+    down = (P_w2i @ torch.tensor([
+               [aabb[0],aabb[1],aabb[2],1],
+               [aabb[3],aabb[1],aabb[2],1],
+               [aabb[3],aabb[4],aabb[2],1],
+               [aabb[0],aabb[4],aabb[2],1]]).T).T
+    
+    left = (P_w2i @ torch.tensor([
+               [aabb[0],aabb[1],aabb[2],1],
+               [aabb[3],aabb[1],aabb[2],1],
+               [aabb[3],aabb[1],aabb[5],1],
+               [aabb[0],aabb[1],aabb[5],1]]).T).T
+    
+    right = (P_w2i @ torch.tensor([
+               [aabb[0],aabb[4],aabb[2],1],
+               [aabb[3],aabb[4],aabb[2],1],
+               [aabb[3],aabb[4],aabb[5],1],
+               [aabb[0],aabb[4],aabb[5],1]]).T).T
+    
+    forward = (P_w2i @ torch.tensor([
+               [aabb[3],aabb[1],aabb[2],1],
+               [aabb[3],aabb[4],aabb[2],1],
+               [aabb[3],aabb[4],aabb[5],1],
+               [aabb[3],aabb[1],aabb[5],1]]).T).T
+    
+    back = (P_w2i @ torch.tensor([
+               [aabb[0],aabb[1],aabb[2],1],
+               [aabb[0],aabb[4],aabb[2],1],
+               [aabb[0],aabb[4],aabb[5],1],
+               [aabb[0],aabb[1],aabb[5],1]]).T).T
+    
+    faces_image = torch.stack([up,down,left,right,forward,back]) # [6,4,3]
+    for i in range(0,faces_image.shape[0]):
+        faces_image[i:i+1,:,:3] /= faces_image[i:i+1,:,2:] 
+    faces_image = faces_image[:,:,:2].to(torch.int32).numpy()
+    return faces_image
 
+
+BGR={0:np.array([0,0,0],dtype=np.uint8),
+     1:np.array([0,0,128],dtype=np.uint8),
+     2:np.array([0,128,0],dtype=np.uint8),
+     4:np.array([128,0,0],dtype=np.uint8),
+     8:np.array([64,64,64],dtype=np.uint8)}
+
+def draw_aabb_mask(image,w2c,K,aabbs):
+    if isinstance(image,torch.Tensor):
+        image = (image/image.max()*255).to(torch.uint8).cpu().numpy()
+    image_with_aabbmask = image.copy()
+    
+    assert aabbs.shape[0] <= 16
+    color = BGR[0]
+    for i in range(0,aabbs.shape[0]):
+        mask = np.zeros_like(image,dtype=np.uint8)
+        mask_pts = get_aabb_imgmask(aabbs[i],w2c,K)
+        mask_pts[0]
+        color = list(BGR[1 & i] + BGR[2 & i] + BGR[4 & i] + BGR[8 & i])
+        color = [int(comp) for comp in color]
+        
+        mask = cv2.fillPoly(mask, [mask_pts[0]], color) # up face
+        image_with_aabbmask = cv2.addWeighted(image_with_aabbmask,0.9,mask,0.25,0)
+        pass
+    return image_with_aabbmask.astype(np.float32)/255.0

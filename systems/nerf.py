@@ -62,6 +62,7 @@ class NeRFSystem(BaseSystem):
         
         loss = sum(lo.mean() for lo in loss_d.values())
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("depth", render_out['depth'].mean(),prog_bar=True,sync_dist=True)
         
         self.log('geo_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
         # self.log('color_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True,sync_dist=True)

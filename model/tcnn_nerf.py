@@ -250,7 +250,9 @@ class vanillaMLP(baseImplicitRep):
 			# nn.Linear(64, 64),
 			# nn.ReLU(True),
 			# self.activation,
-			nn.Linear(128, 16, bias=True)
+			nn.Linear(128, 16, bias=True),
+   
+			# self.activation
 		)
         
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):

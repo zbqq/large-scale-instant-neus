@@ -169,7 +169,7 @@ def center_poses(poses, pts3d=None):
 
     return poses_centered
 
-def create_spheric_poses(radius, mean_h, n_poses=120):
+def create_spheric_poses(radius, offset=torch.tensor([0,0,0]).view(3,1), n_poses=120):
     """
     Create circular poses around z axis.
     Inputs:
@@ -178,13 +178,12 @@ def create_spheric_poses(radius, mean_h, n_poses=120):
     Outputs:
         spheric_poses: (n_poses, 3, 4) the poses in the circular path
     """
-    def spheric_pose(theta, phi,psi,radius):
-        trans_t = lambda t : torch.tensor([
+    def spheric_pose(theta,phi,psi):
+        trans_t = torch.tensor([
             [1,0,0,0],
-            [0,1,0,-t],
-            [0,0,1,0.5*mean_h]
+            [0,1,0,0],
+            [0,0,1,0]
         ],dtype=torch.float32)
-
         rot_phi = lambda phi : torch.tensor([
             [1,0,0],
             [0,np.cos(phi),-np.sin(phi)],
@@ -197,19 +196,22 @@ def create_spheric_poses(radius, mean_h, n_poses=120):
             [np.sin(th),0, np.cos(th)]
         ],dtype=torch.float32)
         rot_psi = lambda psi : torch.tensor([
-            
             [np.cos(psi),-np.sin(psi),0],
-            
             [np.sin(psi),np.cos(psi),0],
             [0,0,1]
         ],dtype=torch.float32)
-        c2w = rot_psi(psi)@rot_phi(phi)  @ trans_t(radius)
+        c2w = rot_psi(psi)@rot_phi(phi) @ trans_t
         # c2w = torch.tensor([[-1,0,0],[0,0,1],[0,1,0]],dtype=torch.float32) @ c2w
+
         return c2w
 
     spheric_poses = []
-    for psi in np.linspace(0, 2*np.pi, n_poses+1)[:-1]:
-        spheric_poses += [spheric_pose(0, -np.pi/8,psi, radius)]
+    
+    for psi in np.linspace(0, 2*np.pi, n_poses+1,dtype=np.float32)[:-1]:
+        rays_o = offset + radius * torch.tensor([np.sin(psi),np.cos(psi),0],dtype=offset.dtype).view(3,1)
+        c2w = spheric_pose(0, -np.pi/8, psi)
+        c2w[:,3:4] += rays_o #[3,4]
+        spheric_poses += [c2w]
     return torch.stack(spheric_poses, 0)
     
 def scale_anything(dat, inp_scale, tgt_scale):

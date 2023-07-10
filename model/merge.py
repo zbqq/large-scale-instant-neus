@@ -96,6 +96,7 @@ class mainModule(baseModule):
         
         
         weights = groups_idx.float().clone()
+        # group_rgb_weights = groups_idx.float().clone() * torch.arange(1,groups_idx.shape[1]+1,device=groups_idx.device).view(1,-1) * 0.1
         if weights_type == None or weights_type == 'UW':
             weights[overlap_idx] = groups_idx.float()[overlap_idx]/overlap_num[overlap_idx].view(-1,1)
             
@@ -126,6 +127,9 @@ class mainModule(baseModule):
                     torch.zeros([xyzs.shape[0],rgbs.shape[-1]+sigmas.shape[-1]],device = sigmas.device,dtype=sigmas.dtype)
             
             sigma_rgb[groups_idx[:,i],:] += torch.concat([sigmas,rgbs],dim=-1) * weights[groups_idx[:,i],i:i+1]
+            # sigma_rgb[groups_idx[:,i],:] += torch.concat([torch.zeros_like(sigmas,dtype=sigmas.dtype,device=sigmas.device)
+            #                                               ,rgbs],dim=-1) * group_rgb_weights[groups_idx[:,i],i:i+1]
+        
         return sigma_rgb
     
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio

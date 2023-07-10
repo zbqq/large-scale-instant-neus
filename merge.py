@@ -30,7 +30,7 @@ if __name__ == '__main__':
     config = load_config(args.conf_path,cli_args=extras)
     system = mainSystem(config=config)
     gpus = [int(gpu) for gpu in args.gpu.split(',')]
-    test_dataset = DATASETS[config.dataset.name](config.dataset,split='merge_test',downsample=0.2)
+    test_dataset = DATASETS[config.dataset.name](config.dataset,split='merge_test',downsample=config.dataset.test_downsample)
     # test_dataset = DATASETS[config.dataset.name](config.dataset,split='merge_test',downsample=config.dataset.test_downsample)
     data_loader = DataLoader(test_dataset,
                               num_workers=0,

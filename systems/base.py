@@ -49,7 +49,7 @@ class ImageProcess():#存储图像
     DEFAULT_RGB_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1)}
     DEFAULT_UV_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1), 'cmap': 'checkerboard'}
     # DEFAULT_GRAYSCALE_KWARGS = {'data_range': None, 'cmap': 'jet'}
-    DEFAULT_GRAYSCALE_KWARGS = {'data_range': [0,10], 'cmap': 'jet'}
+    DEFAULT_GRAYSCALE_KWARGS = {'data_range': [0,4], 'cmap': 'jet'}
     def ConcatImg(self,img_val,img_true):#均为numpy格式
         Img = np.concatenate(img_val,img_true)
         return Img

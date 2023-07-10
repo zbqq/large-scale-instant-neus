@@ -75,6 +75,7 @@ class ColmapDataset(BaseDataset,divideTool):
             t = torch.from_numpy(im.tvec.reshape(3, 1))
             w2c_mats += [torch.concat([torch.concat([R, t], 1), bottom], 0)]
         w2c_mats = torch.stack(w2c_mats, 0).to(torch.float32)
+
         self.R_correct = self.get_R_correct()
         #校正poses，这里的poses是所有的poses
         self.poses = (self.R_correct[None,...] @ torch.linalg.inv(w2c_mats))[perm, :3] # (N_images, 3, 4) cam2world matrices
@@ -123,8 +124,35 @@ class ColmapDataset(BaseDataset,divideTool):
             ])
             # center = self.aabb[:3]+self.aabb[3:]
             scale = center - aabb[:3]
-            h = (aabb[2]+(aabb[5]-aabb[2])*1.2)
-            self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.6,mean_h=h,n_poses=80)
-            self.poses_traj[:,:2,3] += center[:2].reshape(1,2)
-            draw_poses(poses_=self.poses_traj,aabb_=aabb[None,...])
+            offset = center.view(3,1)
+            offset[2]=0.5
+            h = (aabb[2]-(aabb[5]-aabb[2])*0.8)
+            self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.4,offset=offset,n_poses=200)
+            # self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.4,mean_h=h,n_poses=20)
+            # self.poses_traj[:,:2,3] += center[:2].reshape(1,2)
+            
+            self.w2cs = torch.linalg.inv(
+                torch.concat(
+                    [self.poses_traj,bottom.expand([self.poses_traj.shape[0],1,4])]
+                ,1))[:,:3,:]
+            
+            # draw_poses(poses_=self.poses_traj,aabb_=self.aabbs,aabb_idx=[5,6,9,10])
+            # rays_o, rays_d = get_rays(self.directions,self.poses_traj[0])
+            
+            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs[[5,6,9,10]],aabb_idx=[1],img_wh=self.img_wh)
+            
+            # from utils.ray_utils import get_aabb_imgmask
+            # import cv2
+            # imgmask_pts = get_aabb_imgmask(self.aabbs[10],self.w2cs[0],self.K)
+            # image = np.array(np.random.rand(self.img_wh[1],self.img_wh[0],3)*255,dtype=np.uint8)
+            # image2 = image.copy()
+            # color = (0,0,255,0.5)
+            # imgmask_pts = [pts for pts in imgmask_pts]
+            # # for i in range(0,len(imgmask_pts)):
+            # for i in range(0,1):
+            #     if i in [0,2,3]:
+            #         image2 = cv2.fillPoly(image2, [imgmask_pts[i]], color)
+            # # image2 = cv2.fillPoly(image2,imgmask_pts,color)
+            # image = cv2.addWeighted(image,0.7,image2,0.8,0)
+            # cv2.imwrite('./test.png',image)
         pass

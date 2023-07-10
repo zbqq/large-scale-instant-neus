@@ -8,7 +8,7 @@ import numpy as np
 import cv2
 import os
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
-
+from utils.ray_utils import draw_aabb_mask
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from datasets.colmap import ColmapDataset
 from model.loss import NeRFLoss
@@ -70,9 +70,9 @@ class mainSystem(BaseSystem):
             pass
         self.model = mainModule(config=self.config.model,sub_modules=models)
         
-        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='merge_test',downsample=0.2)
+        self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='merge_test',downsample=self.config.dataset.test_downsample)
         # self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=self.config.dataset.test_downsample)
-        self.register_buffer('poses',self.test_dataset.poses)
+        # self.register_buffer('poses',self.test_dataset.poses)
         self.register_buffer('test_directions', self.test_dataset.directions)
         
     def forward(self, pose,split):
@@ -80,9 +80,6 @@ class mainSystem(BaseSystem):
         
         assert split == 'merge_test'
         
-        # poses = self.poses[batch['pose_idx']]
-        # pose = batch['pose']
-        # dirs = self.directions
         rays_o, rays_d = get_rays(self.test_directions,pose)
         return self.model(rays_o,rays_d,weights_type="UW")
 
@@ -94,6 +91,7 @@ class mainSystem(BaseSystem):
         pbar = tqdm(total=batch['poses'].shape[0])
         prefix = self.config.save_dir + f"/merge/{self.config.model.name}"
         os.makedirs(prefix,exist_ok=True)
+        aabbs = self.test_dataset.aabbs[self.model_idxs]
         for idx in range(0,batch['poses'].shape[0]):
             out = self(batch['poses'][idx],split='merge_test')
 
@@ -101,6 +99,7 @@ class mainSystem(BaseSystem):
 
             W, H = self.test_dataset.img_wh
             rgbs_val = out["rgb"].view(H, W, 3)
+            img_with_aabbmask = draw_aabb_mask(rgbs_val,self.test_dataset.w2cs[idx],self.test_dataset.K,aabbs)
             depth = out['depth'].view(H, W)
 
             # psnr_ = psnr(rgbs_true.to("cpu").numpy(),rgbs_val.to("cpu").numpy())
@@ -109,6 +108,7 @@ class mainSystem(BaseSystem):
                                     )
             self.save_image_grid(img_name, [
                 # {'type': 'rgb', 'img': rgbs_true, 'kwargs': {'data_format': 'HWC'}},
+                {'type': 'rgb', 'img': img_with_aabbmask, 'kwargs': {'data_format': 'HWC'}},
                 {'type': 'rgb', 'img': rgbs_val, 'kwargs': {'data_format': 'HWC'}},
                 {'type': 'grayscale', 'img': depth, 'kwargs': {}},
 
