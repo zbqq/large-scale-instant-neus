@@ -11,7 +11,7 @@ screen = pygame.display.set_mode(size)
 icon = pygame.image.load("image/dog01.jpg")#加载图片
 pygame.display.set_icon(icon) #图标的使用
 
-pygame.display.set_caption("你是猪")  #游戏开始的首标题设置
+pygame.display.set_caption("example")  #游戏开始的首标题设置
 ball = pygame.image.load("image/cat.jpg") #
 ballrect = ball.get_rect()
 fps = 300
