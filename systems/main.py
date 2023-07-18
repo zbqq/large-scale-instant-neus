@@ -54,7 +54,7 @@ class mainSystem(BaseSystem):
     
     def setup(self,stage):
         models=[]
-        for i in self.model_idxs:
+        for i in self.model_idxs: # 加载模型
             ckpt_paths = os.listdir(os.path.join(self.model_dir,f'{i}/{self.config.model.name}/ckpts'))
             model_path = os.path.join(self.model_dir,f'{i}/{self.config.model.name}/ckpts',ckpt_paths[-1])
             term = torch.load(model_path)        

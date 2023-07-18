@@ -11,6 +11,7 @@ import trimesh
 from skimage.metrics import peak_signal_noise_ratio as psnr
 
 from datasets.colmap import ColmapDataset
+from datasets.blender import BlenderDataset
 from model.loss import NeRFLoss
 
 from model.nerf import vanillaNeRF
@@ -23,7 +24,8 @@ from torch.utils.data import DataLoader
 
 from model.val_utils import extract_geometry
 DATASETS={
-    'colmap':ColmapDataset
+    'colmap':ColmapDataset,
+    'blender':BlenderDataset
 }
 MODELS={
     'nerf':vanillaNeRF,
@@ -224,6 +226,7 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.model.to(self.device)
         self.register_buffer('directions', self.train_dataset.directions.to(self.device))
         self.register_buffer('poses', self.train_dataset.poses.to(self.device))
+        self.register_buffer('test_poses', self.test_dataset.poses.to(self.device))
         self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
         # opts=[]
         # for n, p in self.model.named_parameters():

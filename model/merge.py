@@ -201,13 +201,13 @@ class mainModule(baseModule):
             else: # 逆CDF采样
                 n_rays,n_samples = rays_o_batch.shape[0],self.config.num_samples_per_ray
                 z_vals = torch.linspace(0.0, 1.0, n_samples,device=device).view(1,-1)
-                z_vals = (nears + (fars - nears)).view(-1,1) * z_vals # [N_samples]
+                z_vals = nears.view(-1,1) + (fars - nears).view(-1,1) * z_vals # [N_samples]
                 with torch.no_grad(): 
                     sample_dist = (fars - nears).view(-1,1) / n_samples
 
                     for _ in range(0,self.config.up_sample_steps):
 
-                        z_vals_sample = up_sample(rays_o_batch,rays_d_batch,z_vals,self.config.n_importance,sample_dist,self.geometry_network)
+                        z_vals_sample = up_sample(rays_o_batch,rays_d_batch,z_vals,self.config.n_importance,sample_dist,self.geometry_network,self.get_alpha)
                         z_vals = cat_z_vals(rays_o_batch,rays_d_batch,z_vals,z_vals_sample)
 
                 xyzs = rays_o_batch[:, None, :] + rays_d_batch[:, None, :] * z_vals[..., :, None] # [N_rays, N_samples, 3]

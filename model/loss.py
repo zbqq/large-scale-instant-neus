@@ -3,6 +3,12 @@ from torch import nn
 import studio
 import torch.nn.functional as F
 
+def binary_cross_entropy(input, target):
+    """
+    F.binary_cross_entropy is not numerically stable in mixed-precision training.
+    """
+    return -(target * torch.log(input) + (1 - target) * torch.log(1 - input)).mean()
+
 class DistortionLoss(torch.autograd.Function):
     """
     Distortion loss proposed in Mip-NeRF 360 (https://arxiv.org/pdf/2111.12077.pdf)
@@ -46,13 +52,24 @@ class NeRFLoss(nn.Module):
 
     def forward(self, results, target, **kwargs):
         d = {}
+        rays_valid = results['rays_valid'].view(-1)
+        # rays_valid = target['fg_mask'].view(-1).to(torch.bool)
+        
         # d['rgb'] = F.mse_loss(results['rgb'],target['rays'].to(self.device),reduction='mean') * self.config.lambda_rgb
         # d['rgb'] = (results['rgb']-target['rays'])**2 * self.config.lambda_rgb
-        d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays']) * self.config.lambda_rgb#训练的epoch小的话很不好
-        o = results['opacity']+1e-10
+        # if rays_valid.sum() > 0:
+        #     d['rgb'] = F.smooth_l1_loss(results['rgb'][rays_valid],target['rays'][rays_valid]) * self.config.lambda_rgb
+        # else:
+        #     d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays']) * self.config.lambda_rgb
+        
+        # d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays']) * self.config.lambda_rgb
+        d['rgb'] = F.smooth_l1_loss(results['rgb'][rays_valid],target['rays'][rays_valid]) * self.config.lambda_rgb#训练的epoch小的话很不好
+        # opacity = results['opacity']+1e-10
+        # opacity = torch.clamp(results['opacity'], 1.e-3, 1.-1.e-3)
         # o = results['opacity'][results['rays_valid']]+1e-10
         # encourage opacity to be either 0 or 1 to avoid floater
-        d['opacity'] = self.lambda_opacity*(-o*torch.log(o))*self.config.lambda_opacity
+        # d['opacity'] = self.lambda_opacity*(-opacity*torch.log(opacity))*self.config.lambda_opacity
+        # d['opacity'] = binary_cross_entropy(opacity, target['fg_mask'].float())*self.config.lambda_opacity
         if self.config.use_normal:
             d['eikonal']=((torch.linalg.norm(results['grad'], ord=2, dim=-1) - 1.)**2).mean()*self.config.lambda_eikonal
         if self.lambda_distortion > 0:

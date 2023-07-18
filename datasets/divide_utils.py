@@ -52,6 +52,18 @@ class divideTool():
         self.aabbs = []
         self.grids=[]
         self.centers=[]
+    def gen_centers_from_cameras(self,grid_dim:Tensor):
+        center_and_scale=[]
+        
+        camera_position = self.poses[:,:,3]
+        # center = self.poses[:,:,3].mean(dim=0)
+        min_position = torch.min(camera_position,dim=0)[0]
+        max_position = torch.max(camera_position,dim=0)[0]
+        radius = (max_position-min_position) / grid_dim / 2
+        center = (min_position + max_position) / 2
+        center_and_scale.append(torch.cat([center,radius],dim=0))
+        center_and_scale = torch.stack(center_and_scale)
+        np.savetxt(self.centers_and_scales_path,center_and_scale.numpy())
     def gen_centers_from_pts(self,grid_dim:Tensor):
         pts = torch.tensor(np.loadtxt(self.new_pts3d_path,usecols=(0,1,2)),dtype=torch.float32)
         cameras_position = self.poses[:,:,3]#[M,3]
@@ -112,7 +124,10 @@ class divideTool():
         """
             
         """
-        self.gen_centers_from_pts(grid_dim)#存真实的scale
+        if self.config.name == 'colmap':    
+            self.gen_centers_from_pts(grid_dim)#存真实的scale
+        elif self.config.name == 'blender':
+            self.gen_centers_from_cameras(grid_dim)
         self.load_centers()#读取
         self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
         self.scales *= self.config.scale_zoom_up # 让前景有重叠

@@ -119,6 +119,8 @@ class baseModule(nn.Module):
         aabb = self.scene_aabb.clone()
         aabb[0:2] -= self.scale[:2] * 10
         aabb[3:5] += self.scale[:2] * 10#扩大一点使得far不会终止到aabb上
+        # aabb[0:3] -= self.scale[:3] * 2
+        # aabb[3:6] += self.scale[:3] * 2#扩大一点使得far不会终止到aabb上
 
         nears,fars = near_far_from_aabb( # 位移不改变nears，fars
             rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
@@ -154,7 +156,8 @@ class baseModule(nn.Module):
                 config=self.config,b_bg=aabb,
                 up_sample_steps=self.config.up_sample_steps,
                 geometry_network=self.geometry_network,
-                color_network=self.color_network
+                color_network=self.color_network,
+                get_alphas=self.get_alpha
             )    
         return results
     def update_extra_state(self, decay=0.95, S=128,occ_eval_fn=None):

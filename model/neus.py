@@ -22,7 +22,7 @@ class NeuS(baseModule):
         
         # self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
         
-        # self.cos_anneal_ratio = 1.0
+        self.cos_anneal_ratio = 1.0
         # self.loss = NeRFLoss(lambda_distortion=0)
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
         cos_anneal_end = self.config.get('cos_anneal_end', 0)
@@ -57,7 +57,9 @@ class NeuS(baseModule):
             self.update_extra_state(occ_eval_fn=lambda pts: occ_eval_fn(x=pts))
         
         
-    def get_alpha(self, sdf, normal, dirs, dists):
+    # def get_alpha(self, sdf, normal, dirs, dists):
+    def get_alpha(self, geo, dists):
+        sdf,normal,dirs=geo['sigma'],geo['normals'],geo['dirs']
         inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)           # Single parameter
         inv_s = inv_s.expand(sdf.shape[0], 1)
 
@@ -148,8 +150,13 @@ class NeuS(baseModule):
             } 
 
             return result
-        else:
-            result = self.render(rays_o,rays_d,split=split,perturb=True)
+        else:            
+            cam_near = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 0.
+            # cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * torch.norm(self.scale)
+            cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 15
+            cam_near_far = torch.cat([cam_near,cam_far],dim=-1)
+            result = self.render(rays_o,rays_d,cam_near_far=cam_near_far,split=split,perturb=True)
+            
             inv_s=self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
             result['inv_s']=inv_s[0]
             return result

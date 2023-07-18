@@ -34,8 +34,8 @@ class NeuSSystem(BaseSystem):
             # dirs = self.directions
             rays_o, rays_d = get_rays(dirs,poses)
             del dirs,poses
-            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
-            # draw_poses(poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh,pts3d=self.train_dataset.pts3d)
+            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=self.poses,aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
+            # draw_poses(poses_=self.poses,aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
             
             return self.model(rays_o, rays_d,split)#返回render结果
         else:
@@ -53,16 +53,18 @@ class NeuSSystem(BaseSystem):
             "rays":rgbs, [N_rays 3]
             "directions":directions, [N_rays 3]
             "pose":pose [3 4]
+            'fg_mask':fg_mask [N_rays,1]
         }
         """
         
-        if self.global_step%self.config.model.grid_update_freq == 0:
+        if self.global_step%self.config.model.grid_update_freq == 0 and self.config.model.use_raymarch :
             self.model.update_step(5,self.global_step)
         render_out = self(batch,split='train')
         loss_d = self.loss(render_out, batch)
         
         loss = sum(lo.mean() for lo in loss_d.values())
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log("depth", render_out['depth'].mean(),prog_bar=True,sync_dist=True)
         
         self.log('sdf_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
         # self.log('tex_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True,sync_dist=True)

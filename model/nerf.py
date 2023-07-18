@@ -2,7 +2,7 @@
 import torch 
 import torch.nn.functional as F
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
-
+from load_tool import draw_poses
 import torch.nn.functional as F
 import torch
 from .tcnn_nerf import vanillaMLP,RenderingNet
@@ -21,49 +21,27 @@ class vanillaNeRF(baseModule):
 
         def occ_eval_fn(x):
             sigma = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
-            sigma = torch.sigmoid(sigma)[...,None]
-            return sigma.reshape(-1).detach()
+            # sigma = torch.sigmoid(sigma)[...,None]
+            return sigma.reshape(-1).detach() * self.render_step_size
         if self.config.use_nerfacc:
-            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.98)
+            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn)
         else:
             self.update_extra_state(occ_eval_fn = lambda pts: occ_eval_fn(x=pts))
 
         
-    def get_alpha(self, sigma, dists):#计算
-
-        alphas = torch.ones_like(sigma) - torch.exp(- sigma * dists)
+    def get_alpha(self, geo, dists):#计算
+        
+        sigmas = geo['sigma'].view(-1,1)
+        assert sigmas.shape == dists.shape
+        alphas = torch.ones_like(sigmas) - torch.exp(- sigmas * dists)
 
         return alphas.view(-1,1)
     
     def forward(self,rays_o,rays_d,split):
         if self.config.use_nerfacc:
             sigma_grad_samples=[]
-            def alpha_fn(t_starts, t_ends, ray_indices):
-                ray_indices = ray_indices.long()
-                t_origins = rays_o[ray_indices]
-                t_dirs = rays_d[ray_indices]
-                midpoints = (t_starts + t_ends) / 2.
-                positions = t_origins + t_dirs * midpoints
-                out = self.geometry_network(positions, with_fea=False, with_grad=False)
-                sigma = out["sigma"].view(-1,1)
-                dists = t_ends - t_starts
-                alpha = self.get_alpha(sigma, dists)#获取rho
-                return alpha#[N_samples, 1]
-            def rgb_alpha_fn(t_starts, t_ends, ray_indices):
-                ray_indices = ray_indices.long()
-                t_origins = rays_o[ray_indices]
-                t_dirs = rays_d[ray_indices]
-                midpoints = (t_starts + t_ends) / 2.
-                positions = t_origins + t_dirs * midpoints
-                out = self.geometry_network(positions, with_fea=True, with_grad=True)
-                sigma, normal, fea = out["sigma"].view(-1,1),out["grad"],out["fea"]
-                sigma_grad_samples.append(normal)
-                dists = t_ends - t_starts
-                normal = F.normalize(normal, p=2, dim=-1)
-                alpha = self.get_alpha(sigma, dists)
-                rgb = self.color_network(t_dirs,fea, normal)
-                return rgb, alpha
-            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb)
+            
+            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb[None,...])
             def sigma_fn(t_starts, t_ends, ray_indices):
                 ray_indices = ray_indices.long()
                 t_origins = rays_o[ray_indices]
@@ -108,7 +86,9 @@ class vanillaNeRF(baseModule):
                 rgb_sigma_fn=rgb_sigma_fn,
                 render_bkgd=self.background_color,
             )
-            opacity = torch.clamp(opacity,1e-8,1000)
+            
+            # opacity = torch.clamp(opacity,1e-8,1000)
+            
             result = {
                 'rgb': rgb,
                 'opacity': opacity,

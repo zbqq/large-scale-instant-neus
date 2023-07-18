@@ -5,9 +5,9 @@ from model.custom_functions import rendering_with_alpha,rendering_W_from_alpha,\
     march_rays_train, near_far_from_aabb, composite_rays_train, \
         morton3D, morton3D_invert, packbits,march_rays,composite_rays
 
-def get_alphas(sigma, dists):#计算
-    alphas = torch.ones_like(sigma) - torch.exp(- sigma * dists)
-    return alphas.view(-1,1)
+# def get_alphas(sigma, dists):#计算
+#     alphas = torch.ones_like(sigma) - torch.exp(- sigma * dists)
+#     return alphas.view(-1,1)
 
 def get_rays_indices(values):
     n_rays, n_samples = values.shape # [N_rays, N_samples]
@@ -58,17 +58,26 @@ def up_sample(
     rays_o,rays_d,z_vals,
     n_importance,sample_dist,
     # b_bg,fb_ratio,
-    geometry_network=None):
+    model_name,
+    geometry_network=None,
+    get_alphas=None):
     assert geometry_network is not None
+    assert get_alphas is not None
+    dirs = rays_d[:,None,:].expand([z_vals.shape[0],z_vals.shape[1],3]).reshape(-1,3)
     pts = (rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None]).view(-1,3) # [N_rays, N_samples, 3]
     # studio.contract_rect(pts,b_bg,fb_ratio,int(pts.shape[0]))
-    geo_output = geometry_network(pts,with_grad=False,with_fea=False)
+    if model_name == 'neus':
+        
+        geo_output = geometry_network(pts,with_grad=True,with_fea=False)
+        geo_output['dirs'] = dirs
     
-    sigmas = geo_output['sigma']
     
+    # sigmas = geo_output['sigma']
+    elif model_name == 'nerf':
+        geo_output = geometry_network(pts,with_grad=False,with_fea=False)
     dists = z_vals[...,1:] - z_vals[...,:-1] # [N_rays,N_samples - 1]    
-    dists = torch.cat([dists, sample_dist.expand(dists[..., :1].shape)], -1).view(-1)
-    alphas = get_alphas(sigmas,dists) # [N_rays * N_samples , 1]
+    dists = torch.cat([dists, sample_dist.expand(dists[..., :1].shape)], -1).view(-1,1)
+    alphas = get_alphas(geo_output,dists) # [N_rays * N_samples , 1]
     rays = get_rays_indices(alphas)
     weights = rendering_W_from_alpha(rays,alphas)
     dists = dists.view(z_vals.shape)
@@ -93,10 +102,12 @@ def render_from_cdf(\
     config,b_bg,
     up_sample_steps=1,
     geometry_network=None,
-    color_network=None
+    color_network=None,
+    get_alphas=None
 ):
     assert geometry_network is not None
     assert color_network is not None
+    assert get_alphas is not None
     """
     rays_o,rays_d: [N_rays,3]
     z_vals: [N_rays,N_samples]
@@ -108,7 +119,7 @@ def render_from_cdf(\
     fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*config.fb_ratio
     n_rays,n_samples = rays_o.shape[0],config.num_samples_per_ray
     z_vals = torch.linspace(0.0, 1.0, n_samples,device=device).view(1,-1)
-    z_vals = (nears + (fars - nears)).view(-1,1) * z_vals # [N_samples]
+    z_vals = nears.view(-1,1) + (fars - nears).view(-1,1) * z_vals # [N_samples]
     
     #fine sample
     with torch.no_grad(): 
@@ -116,22 +127,26 @@ def render_from_cdf(\
 
         for _ in range(0,up_sample_steps):
             
-            z_vals_sample = up_sample(rays_o,rays_d,z_vals,n_importance,sample_dist,geometry_network)
+            z_vals_sample = up_sample(rays_o,rays_d,z_vals,n_importance,sample_dist,config.name,geometry_network,get_alphas)
             z_vals = cat_z_vals(rays_o,rays_d,z_vals,z_vals_sample)
 
     pts = rays_o[:, None, :] + rays_d[:, None, :] * z_vals[..., :, None] # [N_rays, N_samples, 3]
     pts = pts.view(-1,3)
     # studio.contract_rect(pts,b_bg,fb_ratio,int(pts.shape[0]))
-    geo_output = geometry_network(pts,with_grad=False,with_fea=True)
-    sigmas, feas = geo_output['sigma'],geo_output['fea']
-    
-    dists = z_vals[...,1:] - z_vals[...,:-1] # [N_rays,N_samples - 1]    
-    dists = torch.cat([dists, sample_dist.expand(dists[..., :1].shape)], -1).view(-1)
-    
-    
-    alphas = get_alphas(sigmas,dists).view(-1,1) # [N_rays * N_samples , 1]
-    
     dirs = rays_d[:,None,:].expand(n_rays,z_vals.shape[1],3).reshape(-1,3)
+    if config.name=='neus':
+        geo_output = geometry_network(pts,with_grad=True,with_fea=True)
+        geo_output['dirs'] = dirs
+    elif config.name == 'nerf':
+        geo_output = geometry_network(pts,with_grad=False,with_fea=True)
+    feas = geo_output['fea']
+    dists = z_vals[...,1:] - z_vals[...,:-1] # [N_rays,N_samples - 1]    
+    dists = torch.cat([dists, sample_dist.expand(dists[..., :1].shape)], -1).view(-1,1)
+    
+    
+    
+    alphas = get_alphas(geo_output,dists).view(-1,1) # [N_rays * N_samples , 1]
+    
     rays = get_rays_indices(z_vals)
     z_vals = z_vals.view(-1,1)
     dists = dists.view(-1,1)
@@ -139,17 +154,27 @@ def render_from_cdf(\
     ts = torch.cat([z_vals,dists],dim=-1)
     
     # weights = rendering_W_from_alpha(rays,alphas)
-    rgbs = color_network(dirs,feas)
+    if config.color_network.use_normal:
+        normals = geo_output['normals']
+        grad = geo_output['grad']
+        rgbs = color_network(dirs,feas,normals)
+    else:
+        rgbs = color_network(dirs,feas)
     image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
+    opacities = opacities.view(-1)
     results = {
         'num_points':pts.shape[0],
         # 'weights':weights,
         # 'rays_valid':weights_sum>0,
-        'opacity':torch.clamp(opacities,1e-12,1000),
+        # 'opacity':torch.clamp(opacities,1e-12,1000),
+        'opacity':opacities,
+        'rays_valid':opacities>0,
         'num_points':pts.shape[0],
         }
     results['depth']=depth
     results['rgb']=image
+    if config.color_network.use_normal:
+        results['grad'] = grad
     return results
 def render_from_raymarch(\
     rays_o,rays_d,
@@ -158,10 +183,13 @@ def render_from_raymarch(\
     split,
     geometry_network=None,
     color_network=None,
+    get_alphas = None
     
 ):
     assert geometry_network is not None
     assert color_network is not None
+    assert get_alphas is not None
+
     device = rays_o.device
     N=rays_o.shape[0]
     rays_o -= center.view(-1,3)#需要平移到以center为原点坐标系
@@ -215,11 +243,14 @@ def render_from_raymarch(\
             else:
                 alphas = get_alphas(sigmas,ts[:,1])
             image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
+            opacities = opacities.view(-1)
             results = {
                 'num_points':xyzs.shape[0],
                 # 'weights':weights,
                 # 'rays_valid':weights_sum>0,
-                'opacity':torch.clamp(opacities,1e-12,1000),
+                # 'opacity':torch.clamp(opacities,1e-12,1000),
+                'opacity':opacities,
+                'rays_valid':opacities > 0,
                 'num_points':xyzs.shape[0],
                 
             }

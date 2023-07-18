@@ -133,31 +133,47 @@ class BaseDataset(IterableDataset):
             self.mask_name.append(file_path)
         self.idxs.sort()#对应到mask_name中
         self.mask_name.sort()
-        if self.split == 'train':
-            # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8!=0]
-            self.idxs = [i for i in range(0,len(self.idxs)) if i%9!=0]
-        elif self.split == 'test':
-            # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
-            self.idxs = [i for i in range(0,len(self.idxs)) if i%9==0]
+        if self.config.name=='colmap':
+            if self.split == 'train':
+                # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8!=0]
+                self.idxs = [i for i in range(0,len(self.idxs)) if i%9 != 0]
+            elif self.split == 'test':
+                # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
+                self.idxs = [i for i in range(0,len(self.idxs)) if i%9 == 0]
+        elif self.config.name == 'blender':
+            self.idxs = [i for i in range(0,len(self.idxs))]
+            # if self.split == 'train':
+            #     self.idxs = [i for i in range(0,len(self.idxs))]
+            # elif self.split == 'test':
+            #     self.idxs = [i for i in range(0,len(self.idxs))]
     def revise(self,theta,axis='y'):
         self.poses,self.pts3d,self.center = \
             revise(poses=self.poses,pts3d=self.pts3d,theta=theta,axis=axis)
-    def read_img(self,img_path:str,img_wh,blend_a=True):
+    def read_img(self,img_path:str,img_wh,blend_a=True,with_fg_mask=False):
         img = imageio.imread(img_path).astype(np.float32)/255.0
+        
         if img.shape[2] == 4: # blend A to RGB
             if blend_a:
                 img = img[..., :3]*img[..., -1:]+(1-img[..., -1:])
             else:
                 img = img[..., :3]*img[..., -1:]
         img = cv2.resize(img, img_wh)
-        img = rearrange(img, 'h w c -> (h w) c')
-        return torch.tensor(img)
+        img = torch.tensor(rearrange(img, 'h w c -> (h w) c'))
+        
+        rays_valid = torch.ones_like(img)
+        if with_fg_mask:
+            if img.shape[1] > 3:
+                rays_valid = torch.tensor(img[...,-1]>0,dtype=torch.bool)
+                
+            rays_valid = rays_valid.reshape(-1)
+        return img if not with_fg_mask else (img,rays_valid)
     def __len__(self):#一个epoch是一个len
         if self.split.startswith('train'):
             return self.config.batch_num#训练一个grid图片数的上限
         elif self.split == 'merge_test':
             return self.poses.shape[0]
-        return len(self.idxs)
+        return self.poses.shape[0]
+        # return len(self.idxs)
     def __iter__(self):#iterable datasets本身就是一个迭代器，__iter__返回本身，这个
         self.load_mask()
         if self.config.use_random:
@@ -193,11 +209,16 @@ class BaseDataset(IterableDataset):
                 
                 pose_idx = item['pose_idx']
                 
-                img = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False)# w*h 3
+                img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False,with_fg_mask=True)# w*h 3
+                
+                
+                
                 true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
+                
                 # true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
                 dirs=self.directions[true_idx]
                 rays = img[true_idx.to("cpu")]
+                fg_mask = fg_mask[true_idx.to("cpu")]
                 # t_idx=torch.linalg.norm(rays,dim=-1)>1e-1
                 # rays=rays[t_idx,:]
                 # dirs=dirs[t_idx,:]
@@ -207,6 +228,7 @@ class BaseDataset(IterableDataset):
                     "rays":rays,
                     "directions":dirs,
                     "pose_idx": pose_idx,
+                    'fg_mask':fg_mask
                 }
                 self.idx_tmp += 1
                 self.idx_tmp %= len(self.idx_list)
@@ -219,14 +241,20 @@ class BaseDataset(IterableDataset):
             self.pose_idx = self.idx_list[self.idx_tmp]
             # self.pose_idx = 292
             while True:
-                Idx = torch.load(self.mask_name[self.pose_idx])
+                
                 # Idx = torch.load(self.mask_name[0])
+                
+                Idx = torch.load(self.mask_name[self.pose_idx])
                 pose_idx = Idx['pose_idx']
+                
+                # pose_idx=self.pose_idx
+                
                 # pose = self.poses[pose_idx]
-                img = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False)# w*h 3
+                img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False,with_fg_mask=True)# w*h 3
                 yield {
                     "rays": img,
-                    "pose_idx": pose_idx
+                    "pose_idx": pose_idx,
+                    "fg_mask":fg_mask
                 }
                 self.idx_tmp += 1
                 self.idx_tmp %= len(self.idx_list)

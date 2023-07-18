@@ -1,8 +1,6 @@
 import torch
 import numpy as np
 import os
-from tqdm import tqdm
-import trimesh
 from .ray_utils import *
 from .colmap_utils import \
     read_cameras_binary, read_images_binary, read_points3d_binary
@@ -102,6 +100,8 @@ class ColmapDataset(BaseDataset,divideTool):
             # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.poses = [self.poses[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.poses = torch.stack(self.poses)
+            # draw_poses(poses_=self.poses,aabb_=self.aabbs,aabb_idx=[0])
+            pass
         if self.split == 'test':
             self.load_centers()
             self.load_mask()
@@ -125,9 +125,9 @@ class ColmapDataset(BaseDataset,divideTool):
             # center = self.aabb[:3]+self.aabb[3:]
             scale = center - aabb[:3]
             offset = center.view(3,1)
-            offset[2]=0.5
+            offset[2]=9.9
             h = (aabb[2]-(aabb[5]-aabb[2])*0.8)
-            self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.4,offset=offset,n_poses=200)
+            self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.3,offset=offset,n_poses=250)
             # self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.4,mean_h=h,n_poses=20)
             # self.poses_traj[:,:2,3] += center[:2].reshape(1,2)
             

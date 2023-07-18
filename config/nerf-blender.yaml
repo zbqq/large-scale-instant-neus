@@ -1,25 +1,24 @@
 
-tag: ''
-
 # seed: 42
 seed: 31
 # case_name: magicSqure
 # case_name: scan65
+case_name: lego
 # case_name: lego_test
 # case_name: DJI951
-case_name: ObliqueSBY1580
-root_dir: /data3/zzy/data_lab/${case_name}
-# root_dir: /data3/zzy/public_data/${case_name}
+# case_name: ObliqueSBY1580
+# root_dir: /data3/zzy/data_lab/${case_name}
+root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
-grid_X: 4
-grid_Y: 4
+grid_X: 1
+grid_Y: 1
 # mask_dir: ${root_dir}/ray_distance_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/camera_position_mask/${grid_X}x${grid_Y}
 mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 3 # 开始从第几个模型训练
+model_start_num: 0 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
@@ -30,13 +29,20 @@ is_continue: false
 # is_continue: true
 use_DDP: false
 dataset:
-  name: colmap
-  downsample: 0.99 #训练集的图像降采样率
-  test_downsample: 0.2
-  scale_to: 4 #scale放缩至该绝对尺度
-  scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
+  name: blender
+  downsample: 1.0 #训练集的图像降采样率
+  test_downsample: 1.0
+  scale_to: 1.0 #scale放缩至该绝对尺度
+  scale_zoom_up: 1.0 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
   fb_ratio: 0.9
   use_random: true
+  near_plane: 2.0
+  far_plane: 6.0
+  spheric_poses: false
+  use_pixel_centers: true
+  train_split: 'train'
+  val_split: 'val'
+  test_split: 'test'
   root_dir: ${root_dir}
   ray_sampling_strategy: same_image
   # batch_size: 128
@@ -56,38 +62,39 @@ model:
   name: nerf
   aabb:
     use_custom_radius: false
-  use_raymarch: False
-  grid_update_freq: 100
-  grid_resolution: 256 # 128
-  num_samples_per_ray: 128 # 512
+  grid_update_freq: 80
+  grid_resolution: 128 # 128
+  num_samples_per_ray: 256 # 512
   grid_prune: true
-  use_nerfacc: false
+  use_raymarch: True
+  use_nerfacc: True
   randomized: true
   dt_gamma: 0.
   fp16: true
   T_thresh: 2e-4
-  density_thresh: 20.
+  density_thresh: 10.
   scale_zoom_up: ${dataset.scale_zoom_up} #放大一个块的尺度以实现重叠
   fb_ratio: ${dataset.fb_ratio} # 前景半径/背景半径
   rendering_from_alpha: true
-  n_importance: 64
-  up_sample_steps: 4
+  n_importance: 32
+  up_sample_steps: 3
   geometry_network:
-    feature_dim: 16
+    feature_dim: 13
     sdf_activation: none
     sdf_bias: 0.
     grad_type: analytic
+    density_bias: -1
     isosurface:
       method: mc
       resolution: 512
       chunk: 2097152
-      threshold: 1.0
+      threshold: 0.
     xyz_encoding_config:
       otype: Grid
       type: Hash
       n_levels: 16
       n_features_per_level: 2
-      log2_hashmap_size: 21 # 大小只影响是否hash冲突
+      log2_hashmap_size: 20 # 大小只影响是否hash冲突
       base_resolution: 16
       
       # per_level_scale: 1.381912879967776 #N_max = 2048
@@ -102,32 +109,31 @@ model:
       otype: FullyFusedMLP
       activation: ReLU
       output_activation: none
-      n_neurons: 128
+      n_neurons: 64
       n_hidden_layers: 1
       # sphere_init: true
       # weight_norm: true
   color_network:
     name: volume-radiance
-    use_normal: false
+    use_normal: False
     dir_encoding_config:
-      # otype: SphericalHarmonics
-      # degree: 4    
-      otype: Frequency
-      degree: 8
+      otype: SphericalHarmonics
+      degree: 4    
+      # otype: Frequency
+      # degree: 8
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
-      output_activation: none
-      n_neurons: 128
+      output_activation: Sigmoid
+      n_neurons: 64
       n_hidden_layers: 2
-    color_activation: sigmoid
   
 system:
   name: nerf-system
   loss:
     use_normal: ${model.color_network.use_normal}
     lambda_rgb: 1.
-    lambda_opacity: 0.2
+    lambda_opacity: 0.08
     lambda_eikonal: 0.1
     lambda_mask: 0.
   optimizer:
@@ -141,6 +147,8 @@ system:
           lr: 6.e-3
       color_network:
           lr: 6.e-3
+      # variance:
+      #     lr: 2.e-4
   scheduler:
     name: ExponentialLR
     interval: step
@@ -148,7 +156,7 @@ system:
       step_size: 100
       # gamma: 0.99
       # gamma: 1.01
-      gamma: 0.995
+      gamma: 0.98
 
 
 trainer:

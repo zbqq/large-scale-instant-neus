@@ -6,15 +6,36 @@ import pytorch_lightning as pl
 import os
 import cv2
 from torch.utils.data import DataLoader
-from utils.ray_utils import get_rays
+# from utils.ray_utils import get_rays
 # from apex.optimizers import FusedAdam
 from systems.base import BaseSystem
-from model.loss import NeRFLoss
-from datasets.colmap import ColmapDataset
-from model.nerf import vanillaNeRF
 from load_tool import draw_poses
 from utils.utils import load_ckpt_path
 from skimage.metrics import peak_signal_noise_ratio as psnr
+
+
+def get_rays(directions, c2w, keepdim=False):
+    # Rotate ray directions from camera coordinate to the world coordinate
+    # rays_d = directions @ c2w[:, :3].T # (H, W, 3) # slow?
+    assert directions.shape[-1] == 3
+
+    if directions.ndim == 2: # (N_rays, 3)
+        assert c2w.ndim == 3 # (N_rays, 4, 4) / (1, 4, 4)
+        rays_d = (directions[:,None,:] * c2w[:,:3,:3]).sum(-1) # (N_rays, 3)
+        rays_o = c2w[:,:,3].expand(rays_d.shape)
+    elif directions.ndim == 3: # (H, W, 3)
+        if c2w.ndim == 2: # (4, 4)
+            rays_d = (directions[:,:,None,:] * c2w[None,None,:3,:3]).sum(-1) # (H, W, 3)
+            rays_o = c2w[None,None,:,3].expand(rays_d.shape)
+        elif c2w.ndim == 3: # (B, 4, 4)
+            rays_d = (directions[None,:,:,None,:] * c2w[:,None,None,:3,:3]).sum(-1) # (B, H, W, 3)
+            rays_o = c2w[:,None,None,:,3].expand(rays_d.shape)
+
+    if not keepdim:
+        rays_o, rays_d = rays_o.reshape(-1, 3), rays_d.reshape(-1, 3)
+
+    return rays_o, rays_d
+
 class NeRFSystem(BaseSystem):
     def __init__(self,config):
         super().__init__(config)#最初的config
@@ -31,16 +52,17 @@ class NeRFSystem(BaseSystem):
             poses = self.poses[batch['pose_idx']]
             dirs = batch['directions']
             # dirs = self.directions
-            rays_o, rays_d = get_rays(dirs,poses)
+            rays_o, rays_d = get_rays(dirs,poses[None,...])
+            # draw_poses(poses_=self.poses[...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
+            
+            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
             del dirs,poses
-            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
-            # draw_poses(poses_=poses[None,...],aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh,pts3d=self.train_dataset.pts3d)
             
             return self.model(rays_o, rays_d,split)#返回render结果
         else:
-            poses = self.poses[batch['pose_idx']]
+            poses = self.test_poses[batch['pose_idx']]
             dirs = self.test_directions# 一副图像
-            rays_o, rays_d = get_rays(dirs,poses)
+            rays_o, rays_d = get_rays(dirs,poses[None,...])
             del dirs
             rays_o = rays_o.split(self.config.dataset.split_num)
             rays_d = rays_d.split(self.config.dataset.split_num)
