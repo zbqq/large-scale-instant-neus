@@ -102,7 +102,7 @@ class vanillaNeRF(baseModule):
         else:  
             cam_near = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 0.
             # cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * torch.norm(self.scale)
-            cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 15
+            cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 30
             cam_near_far = torch.cat([cam_near,cam_far],dim=-1)
             result = self.render(rays_o,rays_d,cam_near_far=cam_near_far,split=split,perturb=True)
             return result

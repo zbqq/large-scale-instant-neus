@@ -19,12 +19,12 @@ def params_from_models(camera_model:np.ndarray,downsample:float=1.0):
     K = torch.FloatTensor([[fx, 0, cx],
                             [0, fy, cy],
                             [0,  0,  1]])
-    distortion = np.array([
-        camera_model[4],
-        camera_model[5],
-        camera_model[6],
-        camera_model[7]
-    ])
+    # distortion = np.array([
+    #     camera_model[4],
+    #     camera_model[5],
+    #     camera_model[6],
+    #     camera_model[7]
+    # ])
     return K,distortion
 
 
@@ -33,6 +33,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf_path',default='./config/neus-colmap.yaml')
     parser.add_argument('--gpu',type=str,default='0')
+    require_undis=False
     
     args, extras = parser.parse_known_args()
     
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     # assert dataset.camera_model == "OPENCV"
     # camera_models = np.loadtxt(os.path.join(config.root_dir,"sparse/0","cameras.txt"))
     camera_models = read_cameras_binary(os.path.join(config.root_dir,"sparse/0","cameras.bin"))
-    K,distortion=params_from_models(camera_models[1].params)
+    # K,distortion=params_from_models(camera_models[1].params)
     input_path = os.path.join(config.root_dir,'images')
     prefix = "images_undistorted_{}".format(config.dataset.downsample)
     output_path = os.path.join(config.root_dir,prefix)
@@ -57,11 +58,13 @@ if __name__ == '__main__':
             os.makedirs(file_name,exist_ok=True)
             continue
         distorted = cv2.imread(file)
-        undistorted = cv2.undistort(distorted,
-                        K.numpy(),
-                        distortion
-                        )
-        # undistorted = distorted
+        if require_undis:
+            undistorted = cv2.undistort(distorted,
+                            K.numpy(),
+                            distortion
+                            )
+        else:
+            undistorted = distorted
         undistorted = cv2.resize(undistorted,(dataset.img_wh[0],dataset.img_wh[1]))
         cv2.imwrite(file_name,undistorted)
         pbar.update(1)

@@ -75,7 +75,7 @@ model:
   density_thresh: 10.
   scale_zoom_up: ${dataset.scale_zoom_up} #放大一个块的尺度以实现重叠
   fb_ratio: ${dataset.fb_ratio} # 前景半径/背景半径
-  rendering_from_alpha: true
+  rendering_from_alpha: True
   n_importance: 32
   up_sample_steps: 3
   geometry_network:

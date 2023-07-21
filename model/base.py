@@ -44,12 +44,15 @@ class baseModule(nn.Module):
         # L = 16; F = 2; log2_T = 19; N_min = 16
         # b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
         # self.render_step_size = 1.732 * 2 * self.config.radius_z / self.config.num_samples_per_ray
-
+        
         self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
     
     def setup(self,center,scale):#这里的center，scale和divide中的背景aabb一致
         # self.center = center
         # self.scale = scale
+        # center=torch.tensor([0.0,0.0,0.0]).to(center.device)
+        # scale = torch.tensor([1.5,1.5,1.5]).to(center.device)
+        
         
         self.register_buffer('center',center)#这是已经scale to的尺度
         self.register_buffer('scale',scale*self.config.scale_zoom_up)
@@ -88,10 +91,16 @@ class baseModule(nn.Module):
                 #     create_meshgrid3d(self.H, self.H, self.H, False, dtype=torch.int32).reshape(-1, 3))
                 self.register_buffer('density_grid',
                     torch.zeros(self.C, self.H**3))
+                self.iter_density=0
             pass
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
         raise NotImplementedError
-    
+    def preprocess_data(self,batch,stage):
+        
+        
+        
+        
+        pass
     def forward(self,rays_o,rays_d,split):
         raise NotImplementedError
     def render_whole_image(self,rays_o:Tensor,rays_d:Tensor):
@@ -112,13 +121,14 @@ class baseModule(nn.Module):
             "rgb": rgbs,
             "depth": depths
         }
-        
+    
     def render(self,rays_o,rays_d,bg_color=None,perturb=False,cam_near_far=None,shading='full',split='train'):
         rays_o = rays_o.contiguous()
         rays_d = rays_d.contiguous()
         aabb = self.scene_aabb.clone()
         aabb[0:2] -= self.scale[:2] * 10
         aabb[3:5] += self.scale[:2] * 10#扩大一点使得far不会终止到aabb上
+        
         # aabb[0:3] -= self.scale[:3] * 2
         # aabb[3:6] += self.scale[:3] * 2#扩大一点使得far不会终止到aabb上
 
@@ -126,16 +136,16 @@ class baseModule(nn.Module):
             rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
         )
         
-        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabb[None,...],t_min=nears,t_max=fars)
         # fars *= 1.1
         # valid_idx = fars<20
         # rays_o = rays_o[valid_idx]
         # rays_d = rays_d[valid_idx]
         # nears = nears[valid_idx]
-        # fars = fars[valid_idx]
+        # fars = fars[valid_idx]        
         if cam_near_far is not None:
             nears = torch.minimum(nears, cam_near_far[:, 0])
             fars = torch.minimum(fars, cam_near_far[:, 1])
+        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabb[None,...],t_min=nears,t_max=fars)
         
         # mix background color
         if bg_color is None:
@@ -145,9 +155,10 @@ class baseModule(nn.Module):
             results = render_from_raymarch(
                 rays_o,rays_d,self.center,self.scale,self.density_bitfield,
                 self.C,self.H,nears,fars,self.config,perturb,
-                split=split,
+                split=split,aabb=aabb,
                 geometry_network=self.geometry_network,
-                color_network=self.color_network
+                color_network=self.color_network,
+                get_alphas=self.get_alpha
             )
         else:
             results = render_from_cdf(

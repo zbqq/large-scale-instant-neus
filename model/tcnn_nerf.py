@@ -24,43 +24,6 @@ import numpy as np
 
 NEAR_DISTANCE = 0.01
 
-class RenderingNet(nn.Module):
-    def __init__(self,config
-                 ) -> None:
-        super(RenderingNet, self).__init__() 
-        self.config = OmegaConf.to_container(config)
-        self.dir_encoding_config = self.config["dir_encoding_config"]
-        self.color_config = self.config["mlp_network_config"]
-        
-        self.dir_encoder = tcnn.Encoding(#位置编码
-            n_input_dims=3,
-            encoding_config=self.dir_encoding_config
-        )
-        if self.config["use_normal"]:
-            n_input_dims = self.dir_encoder.n_output_dims + 16 + 3
-        else:
-            n_input_dims = self.dir_encoder.n_output_dims + 16
-            
-        self.decoder = tcnn.Network(
-            n_input_dims = n_input_dims,
-            n_output_dims=3,
-            network_config=self.color_config
-        )
-    def forward(self,d,fea,normal=None):
-        """
-            d:[N , 3]
-            fea:[N, fea_name]
-        """
-        d = (d + 1.0) / 2.0
-        d_embd = self.dir_encoder(d)
-        # h = torch.cat([pts, d,gradients, geo_fea], dim=-1)
-        if self.config["use_normal"]:
-            h = torch.cat([d_embd,fea,normal], dim=-1)
-        else:
-            h = torch.cat([d_embd,fea], dim=-1)
-        h = self.decoder(h).float()
-        rgbs = h
-        return rgbs
 class _TruncExp(Function):  # pylint: disable=abstract-method
     # Implementation from torch-ngp:
     # https://github.com/ashawkey/torch-ngp/blob/93b08a0d4ec1cc6e69d85df7f0acdfb99603b628/activation.py
@@ -116,7 +79,8 @@ class RenderingNet(nn.Module):
         else:
             h = torch.cat([fea,d_embd], dim=-1)
         h = self.decoder(h).float()
-        rgbs = h
+        # rgbs = h
+        rgbs = torch.sigmoid(h)
         return rgbs
 class SingleVarianceNetwork(nn.Module):
     def __init__(self, init_val):
@@ -144,6 +108,7 @@ class baseImplicitRep(nn.Module):#都采用grid或plane的方式
         #这里出来的是sdf值
         # scale = 1.5
         self.config = OmegaConf.to_container(config)
+        self.include_xyzs = self.config['include_xyzs']
     def setup(self,center,scale):
         for m in self.modules():
             if isinstance(m, nn.Linear):
@@ -196,29 +161,54 @@ def get_Plane_encoder(config):
 class SDF(baseImplicitRep):
     def __init__(self, config):
         super().__init__(config=config)
-        self.config = OmegaConf.to_container(config)
+        # self.config = OmegaConf.to_container(config)
 
         self.xyz_encoder = \
             tcnn.Encoding(
                 n_input_dims=3,
                 encoding_config=self.config["xyz_encoding_config"])
-        network_input_dim = self.xyz_encoder.n_output_dims + 3
+        network_input_dim = self.xyz_encoder.n_output_dims + 3 * int(self.include_xyzs)
         # if self.config.use_plane:
         #     self.plane_encoder, self.plane_dim = get_Plane_encoder(self.config.plane)
         #     network_input_dim += self.plane_dim
         
-
+        self.sphere_init=True
+        self.weight_norm=True
+        self.inside_out=False
+        
+        
+        n_neurons = self.config["mlp_network_config"]['n_neurons']
         self.activation = nn.Softplus(beta=100,threshold=20)
+        # self.activation = nn.ReLU(inplace=True)
         self.network = nn.Sequential(
-			nn.Linear(network_input_dim, 128,bias=False),
-			# nn.ReLU(True),
+			self.make_linear(network_input_dim, n_neurons, is_first=True, is_last=False),
+			# nn.Linear(network_input_dim, n_neurons,bias=False),
 			self.activation,
-			# nn.Linear(64, 64),
-			# nn.ReLU(True),
+			
 			# self.activation,
-			nn.Linear(128, 16,bias=False)
-		)
+			self.make_linear(n_neurons, self.config["feature_dim"], is_first=False, is_last=True)
+			# nn.Linear(n_neurons, self.config["feature_dim"],bias=False)
+        )
         pass
+    def make_linear(self, dim_in, dim_out, is_first, is_last):
+        layer = nn.Linear(dim_in, dim_out, bias=False)
+        if self.sphere_init:
+            if is_last:
+                if self.inside_out:
+                    torch.nn.init.normal_(layer.weight, mean=-math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
+                else:
+                    torch.nn.init.normal_(layer.weight, mean=math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
+            elif is_first:
+                torch.nn.init.constant_(layer.weight[:, 3:], 0.0)
+                torch.nn.init.normal_(layer.weight[:, :3], 0.0, math.sqrt(2) / math.sqrt(dim_out))
+            else:
+                torch.nn.init.normal_(layer.weight, 0.0, math.sqrt(2) / math.sqrt(dim_out))
+        else:
+            torch.nn.init.kaiming_uniform_(layer.weight, nonlinearity='relu')
+        
+        if self.weight_norm:
+            layer = nn.utils.weight_norm(layer)
+        return layer  
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
         pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T)
         with torch.enable_grad():
@@ -229,7 +219,8 @@ class SDF(baseImplicitRep):
             #     plane_fea = self.plane_encoder(pts)
             # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
             #     h = torch.cat([h,plane_fea],dim=-1)
-            h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
+            # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
+            h = self.network(torch.cat([pts,h],dim=-1))
             # h = self.network(h)
             sdf = h[:, 0]
             fea = h
@@ -245,8 +236,8 @@ class SDF(baseImplicitRep):
                             retain_graph=True, 
                             only_inputs=True
                         )[0]
-                with torch.no_grad():
-                    normals = grad/torch.norm(grad,dim=-1).reshape(-1,1)
+                # with torch.no_grad():
+                normals = F.normalize(grad, p=2, dim=-1)
                 result["normals"]=normals
                 result["grad"]=grad
         return result

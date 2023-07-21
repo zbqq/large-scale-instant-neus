@@ -1,5 +1,6 @@
 binding.cpp
 divide_mask.cu
+gridencoder.cu
 pack.cu
 ray_marching_merf.cu
 rendering_T.cu

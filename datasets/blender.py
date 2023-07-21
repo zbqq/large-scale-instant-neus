@@ -9,7 +9,7 @@ from .ray_utils import *
 from datasets.datasets import BaseDataset
 from load_tool import draw_poses
 from .divide_utils import divideTool
-def get_ray_directions2(W, H, fx, fy, cx, cy, use_pixel_centers=True):
+def get_ray_directionsRUB(W, H, fx, fy, cx, cy, use_pixel_centers=True):
     pixel_center = 0.5 if use_pixel_centers else 0
     i, j = np.meshgrid(
         np.arange(W, dtype=np.float32) + pixel_center,
@@ -59,7 +59,7 @@ class BlenderDataset(BaseDataset,divideTool):
                             [0,  0,  1]])
         self.K_inv = torch.linalg.inv(self.K)
         # self.directions = get_ray_directions(h, w, self.K)#相机坐标系下的dirs，也即归一化坐标|1
-        self.directions = get_ray_directions2(w, h, self.focal, self.focal, w//2, h//2, True).reshape(-1,3)           
+        self.directions = get_ray_directionsRUB(w, h, self.focal, self.focal, w//2, h//2, True).reshape(-1,3)           
         
 
         all_c2w = []

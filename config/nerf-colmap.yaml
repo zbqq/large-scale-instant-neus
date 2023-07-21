@@ -1,39 +1,40 @@
 
-tag: ''
-
 # seed: 42
 seed: 31
 # case_name: magicSqure
 # case_name: scan65
+# case_name: lego
 # case_name: lego_test
 # case_name: DJI951
-case_name: ObliqueSBY1580
+# case_name: ObliqueSBY1580
+case_name: construction-site
 root_dir: /data3/zzy/data_lab/${case_name}
 # root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
-grid_X: 4
-grid_Y: 4
+grid_X: 2
+grid_Y: 2
 # mask_dir: ${root_dir}/ray_distance_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/camera_position_mask/${grid_X}x${grid_Y}
 mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 3 # 开始从第几个模型训练
+model_start_num: 2 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
 # val_mesh_freq: 1
 val_ckpt_freq: 600
-merge_modules: 5,6,9,10
+# merge_modules: 5,6,9,10
+merge_modules: 0,1,2,3
 is_continue: false
 # is_continue: true
 use_DDP: false
 dataset:
   name: colmap
-  downsample: 0.99 #训练集的图像降采样率
-  test_downsample: 0.2
-  scale_to: 4 #scale放缩至该绝对尺度
+  downsample: 0.2 #训练集的图像降采样率
+  test_downsample: 0.1
+  scale_to: 2 #scale放缩至该绝对尺度
   scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
   fb_ratio: 0.9
   use_random: true
@@ -56,20 +57,20 @@ model:
   name: nerf
   aabb:
     use_custom_radius: false
-  use_raymarch: False
   grid_update_freq: 100
   grid_resolution: 256 # 128
-  num_samples_per_ray: 128 # 512
-  grid_prune: true
-  use_nerfacc: false
-  randomized: true
+  num_samples_per_ray: 512 # 512
+  grid_prune: True
+  use_raymarch: False
+  use_nerfacc: False
+  randomized: True
   dt_gamma: 0.
-  fp16: true
+  fp16: True
   T_thresh: 2e-4
-  density_thresh: 20.
+  density_thresh: 10.
   scale_zoom_up: ${dataset.scale_zoom_up} #放大一个块的尺度以实现重叠
   fb_ratio: ${dataset.fb_ratio} # 前景半径/背景半径
-  rendering_from_alpha: true
+  rendering_from_alpha: True
   n_importance: 64
   up_sample_steps: 4
   geometry_network:
@@ -77,6 +78,8 @@ model:
     sdf_activation: none
     sdf_bias: 0.
     grad_type: analytic
+    density_bias: -1
+    include_xyzs: True
     isosurface:
       method: mc
       resolution: 512
@@ -102,32 +105,31 @@ model:
       otype: FullyFusedMLP
       activation: ReLU
       output_activation: none
-      n_neurons: 128
+      n_neurons: 64
       n_hidden_layers: 1
       # sphere_init: true
       # weight_norm: true
   color_network:
     name: volume-radiance
-    use_normal: false
+    use_normal: False
     dir_encoding_config:
-      # otype: SphericalHarmonics
-      # degree: 4    
-      otype: Frequency
-      degree: 8
+      otype: SphericalHarmonics
+      degree: 4    
+      # otype: Frequency
+      # degree: 8
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
-      output_activation: none
-      n_neurons: 128
+      output_activation: Sigmoid
+      n_neurons: 64
       n_hidden_layers: 2
-    color_activation: sigmoid
   
 system:
   name: nerf-system
   loss:
     use_normal: ${model.color_network.use_normal}
     lambda_rgb: 1.
-    lambda_opacity: 0.2
+    lambda_opacity: 0.08
     lambda_eikonal: 0.1
     lambda_mask: 0.
   optimizer:

@@ -1,11 +1,10 @@
 
-tag: ''
-
 # seed: 42
 seed: 31
 # case_name: magicSqure
-# case_name: scan65
-case_name: lego_test
+case_name: scan65
+# case_name: lego
+# case_name: lego_test
 # case_name: DJI951
 # case_name: ObliqueSBY1580
 # root_dir: /data3/zzy/data_lab/${case_name}
@@ -20,21 +19,21 @@ mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
 model_start_num: 0 # 开始从第几个模型训练
-# validate_freq: 300
+validate_freq: 300
 val_mesh_freq: 10000
-validate_freq: 1
+# validate_freq: 1
 # val_mesh_freq: 1
 val_ckpt_freq: 600
 merge_modules: 5,6,9,10
-# is_continue: false
-is_continue: true
+is_continue: false
+# is_continue: true
 use_DDP: false
 dataset:
   name: colmap
   downsample: 1.0 #训练集的图像降采样率
   test_downsample: 1.0
-  scale_to: 2 #scale放缩至该绝对尺度
-  scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
+  scale_to: 4 #scale放缩至该绝对尺度
+  scale_zoom_up: 1.3 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
   fb_ratio: 0.9
   use_random: true
   root_dir: ${root_dir}
@@ -57,28 +56,29 @@ model:
   aabb:
     use_custom_radius: false
   grid_update_freq: 80
-  grid_resolution: 256 # 128
-  num_samples_per_ray: 64 # 512
-  grid_prune: true
+  grid_resolution: 180 # 128
+  num_samples_per_ray: 512 # 512
+  grid_prune: True
   use_raymarch: True
   use_nerfacc: True
-  randomized: true
+  randomized: True
   dt_gamma: 0.
-  fp16: true
+  fp16: True
   T_thresh: 2e-4
   density_thresh: 10.
   scale_zoom_up: ${dataset.scale_zoom_up} #放大一个块的尺度以实现重叠
   fb_ratio: ${dataset.fb_ratio} # 前景半径/背景半径
-  init_variance: 0.2
+  rendering_from_alpha: True
+  init_variance: 0.3
   cos_anneal_end: 5000
-  rendering_from_alpha: true
-  n_importance: 32
-  up_sample_steps: 3
+  n_importance: 64
+  up_sample_steps: 4
   geometry_network:
     feature_dim: 13
     sdf_activation: none
     sdf_bias: 0.
     grad_type: analytic
+    include_xyzs: True
     isosurface:
       method: mc
       resolution: 512
@@ -106,32 +106,31 @@ model:
       output_activation: none
       n_neurons: 64
       n_hidden_layers: 1
-      # sphere_init: true
-      # weight_norm: true
+      sphere_init: true
+      weight_norm: true
   color_network:
     name: volume-radiance
-    use_normal: False
+    use_normal: True
     dir_encoding_config:
-      # otype: SphericalHarmonics
-      # degree: 4    
-      otype: Frequency
-      degree: 8
+      otype: SphericalHarmonics
+      degree: 4    
+      # otype: Frequency
+      # degree: 8
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
       output_activation: none
       n_neurons: 64
       n_hidden_layers: 2
-    color_activation: sigmoid
   
 system:
   name: neus-system
   loss:
     use_normal: ${model.color_network.use_normal}
     lambda_rgb: 1.
-    # lambda_opacity: 0.2
+    lambda_opacity: 0.1
+    # lambda_opacity: 0.08
     lambda_eikonal: 0.1
-    lambda_mask: 0.
   optimizer:
     # name: Adam
     name: FusedAdam
@@ -152,7 +151,7 @@ system:
       step_size: 100
       # gamma: 0.99
       # gamma: 1.01
-      gamma: 0.98
+      gamma: 0.995
 
 
 trainer:

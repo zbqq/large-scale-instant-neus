@@ -224,7 +224,7 @@ inline __host__ __device__ void __contract_rect(
         Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.z)) / (mag.z);
 
     }
-
+    printf("hhh\n");
     pt.x *= Linf_x_scale;
     pt.y *= Linf_y_scale;
     pt.z *= Linf_z_scale;
@@ -493,12 +493,12 @@ __global__ void kernel_march_rays_train(
     
     while (t < far && step < num_steps) {
         // current point
-        // const float x = clamp(ox + t * dx, -b3.x, b3.x);//bound default to 2
-        // const float y = clamp(oy + t * dy, -b3.y, b3.y);
-        // const float z = clamp(oz + t * dz, -b3.z, b3.z);
-        const float x = ox + t * dx;
-        const float y = oy + t * dy;
-        const float z = oz + t * dz;
+        const float x = clamp(ox + t * dx, -b3.x, b3.x);//bound default to 2
+        const float y = clamp(oy + t * dy, -b3.y, b3.y);
+        const float z = clamp(oz + t * dz, -b3.z, b3.z);
+        // const float x = ox + t * dx;
+        // const float y = oy + t * dy;
+        // const float z = oz + t * dz;
         float3 pt = make_float3(x,y,z);
 
         float dt = clamp(t * dt_gamma, dt_min, dt_max);

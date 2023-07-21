@@ -72,7 +72,8 @@ class divideTool():
         min_position = torch.min(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
         # max_position = torch.max(cameras_position,dim=0)[0]
         # min_position = torch.min(cameras_position,dim=0)[0]
-        max_position[2] = pts[:,2].max()
+        
+        # max_position[2] = pts[:,2].max()
         
         
         radius = (max_position-min_position) / grid_dim / 2 # 前景radius
@@ -91,7 +92,7 @@ class divideTool():
         centroids[:,:,0] += offsets[0].unsqueeze(1) # X x Y 个区域的x坐标
         centroids[:,:,1] += offsets[1] # X x Y个区域的y坐标
         centroids[:,:,2] += offsets[2] # X x Y个区域的y坐标
-        # draw_poses(aabb_=torch.concat([min_position,max_position])[None,...])
+        
         centroids = centroids.view(-1,3)#n个长方体的几何中心
         center_and_scale=[]
         for i in range(0,centroids.shape[0]):
@@ -135,7 +136,7 @@ class divideTool():
         self.aabbs = torch.concat([self.centers-self.scales,self.centers+self.scales],dim=-1)
         self.fg_aabbs = torch.concat([self.centers-self.fg_scales,self.centers+self.fg_scales],dim=-1)
         # 放缩到2,4,8,...
-        # draw_poses(poses_=self.poses,aabb_=self.aabbs)
+        draw_poses(poses_=self.poses,aabb_=self.aabbs)
         bits_array_len = math.floor(self.img_wh[0]*self.img_wh[1]/32)
         
         if mask_type == 'mega_nerf_mask':

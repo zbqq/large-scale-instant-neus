@@ -1,6 +1,7 @@
             
 import torch
 import studio
+from load_tool import draw_poses
 from model.custom_functions import rendering_with_alpha,rendering_W_from_alpha,\
     march_rays_train, near_far_from_aabb, composite_rays_train, \
         morton3D, morton3D_invert, packbits,march_rays,composite_rays
@@ -180,7 +181,7 @@ def render_from_raymarch(\
     rays_o,rays_d,
     center,scale,density_bitfield,
     C,H,nears,fars,config,perturb,
-    split,
+    split,aabb,
     geometry_network=None,
     color_network=None,
     get_alphas = None
@@ -193,17 +194,18 @@ def render_from_raymarch(\
     device = rays_o.device
     N=rays_o.shape[0]
     rays_o -= center.view(-1,3)#需要平移到以center为原点坐标系
-    scene_aabb =scene_aabb - center.repeat([2])
+    scene_aabb = aabb - center.repeat([2])
     # assert in_aabb(rays_o[0,:],scene_aabb)
     # fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*config.fb_ratio
     N=rays_o.shape[0]
     aabb = scene_aabb.clone()
-    aabb[0:2] -= scale[:2]
-    aabb[3:5] += scale[:2]#扩大一点使得far不会终止到aabb上
-    nears,fars = near_far_from_aabb( # 位移不改变nears，fars
-        rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
-    )
-        
+    # aabb[0:2] -= scale[:2]
+    # aabb[3:5] += scale[:2]#扩大一点使得far不会终止到aabb上
+    # nears,fars = near_far_from_aabb( # 位移不改变nears，fars
+    #     rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
+    # )
+    # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabb[None,...])
+                
     
     fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*config.fb_ratio
     results={}
@@ -212,18 +214,18 @@ def render_from_raymarch(\
         # with torch.no_grad():
         xyzs, dirs, ts, rays = \
             march_rays_train(rays_o, rays_d, scale, fb_ratio,
-                                    True, density_bitfield, 
+                                    False, density_bitfield, 
                                     C, H, 
                                     nears, fars, perturb, 
                                     config.dt_gamma, config.num_samples_per_ray,)
             
-        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,pts3d=xyzs.to('cpu'),aabb_=self.scene_aabb[None,...],t_min=nears,t_max=fars)
+        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,pts3d=xyzs.to('cpu'),aabb_=scene_aabb[None,...],t_min=nears,t_max=fars)
         # draw_poses(pts3d=xyzs.to('cpu'),aabb_=self.scene_aabb[None,...],t_min=nears,t_max=fars)
         
         xyzs += center.view(-1,3)
         dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
         with torch.cuda.amp.autocast(enabled=config.fp16):
-            # geo_output = geometry_network(xyzs,with_fea=True,with_grad=False)
+            # geo_output = geometry_network(xyzs,with_fea=True,with_grad=True)
             # sigmas,feas = geo_output['sigma'],geo_output['fea']
             # rgbs = color_network(dirs,feas)
             geo_output = geometry_network(xyzs,with_fea=True,with_grad=True)
@@ -234,14 +236,15 @@ def render_from_raymarch(\
                 # rgbs = color_network(dirs,feas)
                 rgbs = color_network(dirs,feas,normals)
             else:
-                geo_output = geometry_network(xyzs,with_fea=True,with_grad=False)
+                geo_output = geometry_network(xyzs,with_fea=True,with_grad=True)
                 sigmas,feas = geo_output['sigma'],geo_output['fea']
                 rgbs = color_network(dirs,feas)
+        geo_output['dirs'] = dirs
         if config.rendering_from_alpha:
             if config.color_network.use_normal:
-                alphas = get_alphas(sigmas,normals,dirs,ts[:,1])
+                alphas = get_alphas(geo_output,ts[:,1:2])
             else:
-                alphas = get_alphas(sigmas,ts[:,1])
+                alphas = get_alphas(geo_output,ts[:,1:2])
             image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
             opacities = opacities.view(-1)
             results = {

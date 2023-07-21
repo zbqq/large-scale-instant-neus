@@ -35,11 +35,11 @@ class NeuSSystem(BaseSystem):
             rays_o, rays_d = get_rays(dirs,poses)
             del dirs,poses
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=self.poses,aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
-            # draw_poses(poses_=self.poses,aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
+            draw_poses(poses_=self.poses,aabb_=self.model.scene_aabb[None,...])
             
             return self.model(rays_o, rays_d,split)#返回render结果
         else:
-            poses = self.poses[batch['pose_idx']]
+            poses = self.test_poses[batch['pose_idx']]
             dirs = self.test_directions# 一副图像
             rays_o, rays_d = get_rays(dirs,poses)
             del dirs

@@ -40,20 +40,41 @@ class NeuS(baseModule):
                 c = prev_cdf
                 alpha = ((p + 1e-5) / (c + 1e-5)).view(-1, 1).clip(0.0, 1.0)
                 return alpha
+            # def occ_eval_fn(x): # neus2's occ_eval_fn
+            #     sdf = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
+
+            #     inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)#可以做一点改动
+            #     inv_s = inv_s.expand(sdf.shape[0], 1)
+            #     density = inv_s*torch.sigmoid(inv_s*sdf[...,None])*torch.sigmoid(inv_s*sdf[...,None])*(1/torch.sigmoid(inv_s*sdf[...,None])-1)
+            #     # density = density.clip(0.0, 1.0) # 上限较低会导致某次更新后断崖式
+            #     return density.view(-1,1)
                 # return torch.ones_like(alpha,dtype=alpha.dtype)
-            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.95)
+            # self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.95)
+            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn)
             
         else:
             #     return density.reshape(-1).detach()
             
-            def occ_eval_fn(x): # neus2's occ_eval_fn
-                sdf = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
+            # def occ_eval_fn(x): # neus2's occ_eval_fn
+            #     sdf = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
 
-                inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)#可以做一点改动
+            #     inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)#可以做一点改动
+            #     inv_s = inv_s.expand(sdf.shape[0], 1)
+            #     density = inv_s*torch.sigmoid(inv_s*sdf[...,None])*torch.sigmoid(inv_s*sdf[...,None])*(1/torch.sigmoid(inv_s*sdf[...,None])-1)
+            #     # density = density.clip(0.0, 1.0) # 上限较低会导致某次更新后断崖式
+            #     return density.view(-1)
+            def occ_eval_fn(x):
+                sdf = self.geometry_network(x, with_grad=False, with_fea=False)['sigma']
+                inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
                 inv_s = inv_s.expand(sdf.shape[0], 1)
-                density = inv_s*torch.sigmoid(inv_s*sdf[...,None])*torch.sigmoid(inv_s*sdf[...,None])*(1/torch.sigmoid(inv_s*sdf[...,None])-1)
-                density = density.clip(0.0, 1.0)
-        
+                estimated_next_sdf = sdf[...,None] - self.render_step_size * 0.5
+                estimated_prev_sdf = sdf[...,None] + self.render_step_size * 0.5
+                prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
+                next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
+                p = prev_cdf - next_cdf
+                c = prev_cdf
+                alpha = ((p + 1e-5) / (c + 1e-5)).view(-1, 1).clip(0.0, 1.0)
+                return alpha.view(-1)
             self.update_extra_state(occ_eval_fn=lambda pts: occ_eval_fn(x=pts))
         
         
@@ -93,11 +114,10 @@ class NeuS(baseModule):
                 t_dirs = rays_d[ray_indices]
                 midpoints = (t_starts + t_ends) / 2.
                 positions = t_origins + t_dirs * midpoints
-                out = self.geometry_network(positions, with_fea=False, with_grad=True)
-                sdf, sdf_grad=out["sigma"], out["grad"]
+                out = self.geometry_network(positions, with_fea=True, with_grad=True)
+                out['dirs'] = t_dirs
                 dists = t_ends - t_starts
-                normal = F.normalize(sdf_grad, p=2, dim=-1)
-                alpha = self.get_alpha(sdf, normal, t_dirs, dists)#获取rho
+                alpha = self.get_alpha(out, dists)#获取rho
                 return alpha#[N_samples, 1]
             def rgb_alpha_fn(t_starts, t_ends, ray_indices):
                 ray_indices = ray_indices.long()
@@ -106,12 +126,15 @@ class NeuS(baseModule):
                 midpoints = (t_starts + t_ends) / 2.
                 positions = t_origins + t_dirs * midpoints
                 out = self.geometry_network(positions, with_fea=True, with_grad=True)
-                sdf, sdf_grad, feature=out["sigma"],out["grad"],out["fea"]
+                normals, sdf_grad, feature = out["normals"],out["grad"],out["fea"]
+                out['dirs'] = t_dirs
                 sdf_grad_samples.append(sdf_grad)
                 dists = t_ends - t_starts
-                normal = F.normalize(sdf_grad, p=2, dim=-1)
-                alpha = self.get_alpha(sdf, normal, t_dirs, dists)
-                rgb = self.color_network(t_dirs,feature, normal)
+                alpha = self.get_alpha(out, dists)
+                if self.config.color_network.use_normal:
+                    rgb = self.color_network(t_dirs,feature,normals)
+                else:
+                    rgb = self.color_network(t_dirs,feature)
                 return rgb, alpha
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb)
 

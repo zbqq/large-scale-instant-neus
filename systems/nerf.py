@@ -45,6 +45,19 @@ class NeRFSystem(BaseSystem):
         #                                 self.poses,
         #                                 self.train_dataset.img_wh)
         pass
+    # def preprocess_data(self, batch, stage):
+    #     if 'index' in batch: # validation / testing
+    #         index = batch['index']
+    #     else:
+    #         if self.config.model.batch_image_sampling:
+    #             index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,), device=self.dataset.all_images.device)
+    #         else:
+    #             index = torch.randint(0, len(self.dataset.all_images), size=(1,), device=self.dataset.all_images.device)
+        
+    #     if stage in ['train']:
+    #         c2w 
+        
+
     
     def forward(self, batch,split):
         if split == 'train':

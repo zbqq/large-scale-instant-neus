@@ -20,8 +20,8 @@ if __name__ == '__main__':
     
     config = load_config(args.conf_path)
     
-    # dataset = DATASETS[config.dataset.name](config.dataset,split='divide',downsample=config.dataset.downsample)
-    dataset = DATASETS[config.dataset.name](config.dataset,split='train',downsample=config.dataset.downsample)
+    dataset = DATASETS[config.dataset.name](config.dataset,split='divide',downsample=config.dataset.downsample)
+    # dataset = DATASETS[config.dataset.name](config.dataset,split='train',downsample=config.dataset.downsample)
     grid_dim = torch.tensor([config.dataset.grid_X,
                              config.dataset.grid_Y,
                              1])
