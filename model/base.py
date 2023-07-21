@@ -30,7 +30,7 @@ import studio
 from einops import rearrange
 import numpy as np
 import tqdm
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 NEAR_DISTANCE = 0.01
 def in_aabb(position,aabb):
     if (position-aabb[:3]>=0).sum()==3 and (position-aabb[3:]<=0).sum()==3:

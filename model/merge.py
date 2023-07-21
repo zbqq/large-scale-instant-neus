@@ -27,7 +27,7 @@ from einops import rearrange
 # from .custom_functions import TruncExp
 import numpy as np
 import tqdm
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 from .base import baseModule
 from datasets.ray_utils import sampled_pdf,pts_from_rays
 from model.custom_functions import near_far_from_aabb,march_rays_train,\

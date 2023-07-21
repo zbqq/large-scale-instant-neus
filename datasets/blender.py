@@ -7,7 +7,7 @@ import torchvision.transforms.functional as TF
 import json
 from .ray_utils import *
 from datasets.datasets import BaseDataset
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 from .divide_utils import divideTool
 def get_ray_directionsRUB(W, H, fx, fy, cx, cy, use_pixel_centers=True):
     pixel_center = 0.5 if use_pixel_centers else 0

@@ -1,7 +1,7 @@
             
 import torch
 import studio
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 from model.custom_functions import rendering_with_alpha,rendering_W_from_alpha,\
     march_rays_train, near_far_from_aabb, composite_rays_train, \
         morton3D, morton3D_invert, packbits,march_rays,composite_rays

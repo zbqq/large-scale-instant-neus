@@ -19,7 +19,7 @@ mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 2 # 开始从第几个模型训练
+model_start_num: 3 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
@@ -32,7 +32,7 @@ is_continue: false
 use_DDP: false
 dataset:
   name: colmap
-  downsample: 0.2 #训练集的图像降采样率
+  downsample: 0.5 #训练集的图像降采样率
   test_downsample: 0.1
   scale_to: 2 #scale放缩至该绝对尺度
   scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1

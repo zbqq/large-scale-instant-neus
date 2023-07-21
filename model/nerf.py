@@ -2,7 +2,7 @@
 import torch 
 import torch.nn.functional as F
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 import torch.nn.functional as F
 import torch
 from .tcnn_nerf import vanillaMLP,RenderingNet

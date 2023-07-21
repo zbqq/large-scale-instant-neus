@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 # from utils.ray_utils import get_rays
 # from apex.optimizers import FusedAdam
 from systems.base import BaseSystem
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 from utils.utils import load_ckpt_path
 from skimage.metrics import peak_signal_noise_ratio as psnr
 

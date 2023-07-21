@@ -10,7 +10,7 @@ from typing import List
 from nerfacc import OccupancyGrid,ray_aabb_intersect,ContractionType
 from .ray_utils import *
 # from datasets.datasets import revise
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 import math
 import studio
 #用于分割子场景

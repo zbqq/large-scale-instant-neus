@@ -7,7 +7,7 @@ from .ray_utils import *
 from .colmap_utils import \
     read_cameras_binary, read_images_binary, read_points3d_binary
 from datasets.datasets import BaseDataset
-from load_tool import draw_poses
+from scripts.load_tool import draw_poses
 from .divide_utils import divideTool
 # RDF2BRU = np.array([[1,0,0],[0,0,-1],[0,1,0]]) @ np.array([[0,0,1],[0,-1,0],[1,0,0]])
 class MegaNeRFDataset(BaseDataset,divideTool):
