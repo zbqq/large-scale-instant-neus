@@ -48,7 +48,7 @@ class BlenderDataset(BaseDataset,divideTool):
         
         # self.w, self.h = w, h
         # self.img_wh=(w,h)
-        self.near, self.far = self.config.near_plane, self.config.far_plane
+        # self.near, self.far = self.config.near_plane, self.config.far_plane
 
         self.focal = 0.5 * self.img_wh[0] / math.tan(0.5 * meta['camera_angle_x']) * self.downsample # scaled focal length
         fx,fy = self.focal,self.focal

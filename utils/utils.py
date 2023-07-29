@@ -359,7 +359,6 @@ def load_ckpt_path(ckpt_dir):
     
 
     
-    
 def sphere_init_tcnn_network(n_input_dims, n_output_dims, config, network):
     rank_zero_debug('Initialize tcnn MLP to approximately represent a sphere.')
     """

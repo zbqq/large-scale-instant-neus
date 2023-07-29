@@ -56,10 +56,11 @@ class RenderingNet(nn.Module):
             n_input_dims=3,
             encoding_config=self.dir_encoding_config
         )
+        feature_dim = self.config["input_feature_dim"]
         if self.config["use_normal"]:
-            n_input_dims = self.dir_encoder.n_output_dims + 16 + 3
+            n_input_dims = self.dir_encoder.n_output_dims + feature_dim + 3
         else:
-            n_input_dims = self.dir_encoder.n_output_dims + 16
+            n_input_dims = self.dir_encoder.n_output_dims + feature_dim
             
         self.decoder = tcnn.Network(
             n_input_dims = n_input_dims,
@@ -79,7 +80,7 @@ class RenderingNet(nn.Module):
         else:
             h = torch.cat([fea,d_embd], dim=-1)
         h = self.decoder(h).float()
-        # rgbs = h
+        rgbs = h
         rgbs = torch.sigmoid(h)
         return rgbs
 class SingleVarianceNetwork(nn.Module):
@@ -172,9 +173,9 @@ class SDF(baseImplicitRep):
         #     self.plane_encoder, self.plane_dim = get_Plane_encoder(self.config.plane)
         #     network_input_dim += self.plane_dim
         
-        self.sphere_init=True
-        self.weight_norm=True
-        self.inside_out=False
+        self.sphere_init=self.config["mlp_network_config"]['sphere_init']
+        self.weight_norm=self.config["mlp_network_config"]['weight_norm']
+        self.inside_out=False # 室内 or 室外
         
         
         n_neurons = self.config["mlp_network_config"]['n_neurons']
@@ -219,8 +220,9 @@ class SDF(baseImplicitRep):
             #     plane_fea = self.plane_encoder(pts)
             # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
             #     h = torch.cat([h,plane_fea],dim=-1)
-            # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
-            h = self.network(torch.cat([pts,h],dim=-1))
+            network_input = torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1)
+            h = self.network(network_input)
+            # h = self.network(torch.cat([pts,h],dim=-1))
             # h = self.network(h)
             sdf = h[:, 0]
             fea = h
@@ -306,16 +308,16 @@ class vanillaMLP(baseImplicitRep):
 			# nn.Linear(64, 64),
 			# nn.ReLU(True),
 			# self.activation,
-			nn.Linear(n_neurons, 16, bias=bias),
+			nn.Linear(n_neurons, self.config["feature_dim"], bias=bias),
    
 			# self.activation
 		)
-        # self.f=tcnn.NetworkWithInputEncoding(
-        #     n_input_dims=3,
-        #     n_output_dims=16,
-        #     encoding_config=self.config["xyz_encoding_config"],
-        #     network_config=self.config["mlp_network_config"]
-        # )
+        self.f=tcnn.NetworkWithInputEncoding(
+            n_input_dims=3,
+            n_output_dims=16,
+            encoding_config=self.config["xyz_encoding_config"],
+            network_config=self.config["mlp_network_config"]
+        )
         
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
         
@@ -325,13 +327,15 @@ class vanillaMLP(baseImplicitRep):
         with torch.enable_grad():
             if with_grad:
                 pts = pts.requires_grad_(True)
-            h = self.xyz_encoder(pts).float()
-            # # if self.config.use_plane:
-            # #     plane_fea = self.plane_encoder(pts)
-            # # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
-            #     # h = torch.cat([h,plane_fea],dim=-1)
-            h = self.network(h)
-            # h = self.f(pts).float()
+                
+            # h = self.xyz_encoder(pts).float()
+            # # # if self.config.use_plane:
+            # # #     plane_fea = self.plane_encoder(pts)
+            # # # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
+            # #     # h = torch.cat([h,plane_fea],dim=-1)
+            # h = self.network(h)
+            
+            h = self.f(pts).float()
             sigma = h[:, 0]
             sigma = trunc_exp(sigma + float(self.config["density_bias"]))
             

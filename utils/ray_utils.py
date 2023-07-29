@@ -28,20 +28,45 @@ def get_ray_directions(H, W, K, device='cpu', random=False, return_uv=False, fla
     return directions
 
 
-@torch.cuda.amp.autocast(dtype=torch.float32)
-def get_rays(directions, c2w):
+# @torch.cuda.amp.autocast(dtype=torch.float32)
+# def get_rays(directions, c2w):
     
-    if c2w.ndim==2:
-        # Rotate ray directions from camera coordinate to the world coordinate
-        rays_d = directions @ c2w[:, :3].T
-    else:
-        rays_d = rearrange(directions, 'n c -> n 1 c') @ \
-                 rearrange(c2w[..., :3], 'n a b -> n b a')
-        rays_d = rearrange(rays_d, 'n 1 c -> n c')
-    # The origin of all rays is the camera origin in world coordinate
-    rays_o = c2w[..., 3].expand_as(rays_d)
+#     if c2w.ndim==2:
+#         # Rotate ray directions from camera coordinate to the world coordinate
+#         rays_d = directions @ c2w[:, :3].T
+#     else:
+#         rays_d = rearrange(directions, 'n c -> n 1 c') @ \
+#                  rearrange(c2w[..., :3], 'n a b -> n b a')
+#         rays_d = rearrange(rays_d, 'n 1 c -> n c')
+#     # The origin of all rays is the camera origin in world coordinate
+#     rays_o = c2w[..., 3].expand_as(rays_d)
+
+#     return rays_o, rays_d
+
+@torch.cuda.amp.autocast(dtype=torch.float32)
+def get_rays(directions, c2w, keepdim=False):
+    # Rotate ray directions from camera coordinate to the world coordinate
+    # rays_d = directions @ c2w[:, :3].T # (H, W, 3) # slow?
+    assert directions.shape[-1] == 3
+
+    if directions.ndim == 2: # (N_rays, 3)
+        assert c2w.ndim == 3 # (N_rays, 4, 4) / (1, 4, 4)
+        rays_d = (directions[:,None,:] * c2w[:,:3,:3]).sum(-1) # (N_rays, 3)
+        rays_o = c2w[:,:,3].expand(rays_d.shape)
+    elif directions.ndim == 3: # (H, W, 3)
+        if c2w.ndim == 2: # (4, 4)
+            rays_d = (directions[:,:,None,:] * c2w[None,None,:3,:3]).sum(-1) # (H, W, 3)
+            rays_o = c2w[None,None,:,3].expand(rays_d.shape)
+        elif c2w.ndim == 3: # (B, 4, 4)
+            rays_d = (directions[None,:,:,None,:] * c2w[:,None,None,:3,:3]).sum(-1) # (B, H, W, 3)
+            rays_o = c2w[:,None,None,:,3].expand(rays_d.shape)
+
+    if not keepdim:
+        rays_o, rays_d = rays_o.reshape(-1, 3), rays_d.reshape(-1, 3)
 
     return rays_o, rays_d
+
+
 
 
 @torch.cuda.amp.autocast(dtype=torch.float32)
@@ -250,7 +275,7 @@ BGR={0:np.array([0,0,0],dtype=np.uint8),
      1:np.array([0,0,128],dtype=np.uint8),
      2:np.array([0,128,0],dtype=np.uint8),
      4:np.array([128,0,0],dtype=np.uint8),
-     8:np.array([64,64,64],dtype=np.uint8)}
+     8:np.array([32,32,32],dtype=np.uint8)}
 
 def draw_aabb_mask(image,w2c,K,aabbs):
     if isinstance(image,torch.Tensor):
@@ -263,10 +288,13 @@ def draw_aabb_mask(image,w2c,K,aabbs):
         mask = np.zeros_like(image,dtype=np.uint8)
         mask_pts = get_aabb_imgmask(aabbs[i],w2c,K)
         mask_pts[0]
-        color = list(BGR[1 & i] + BGR[2 & i] + BGR[4 & i] + BGR[8 & i])
+        color = list(BGR[1 & (i+1)] + BGR[2 & (i+1)] + BGR[4 & (i+1)] + BGR[8 & (i+1)])
         color = [int(comp) for comp in color]
         
         mask = cv2.fillPoly(mask, [mask_pts[0]], color) # up face
-        image_with_aabbmask = cv2.addWeighted(image_with_aabbmask,0.9,mask,0.25,0)
+        image_with_aabbmask = cv2.addWeighted(image_with_aabbmask,1.0,mask,0.4,0)
+        # for j in range(0,mask_pts.shape[0]):
+        #     mask = cv2.fillPoly(mask, [mask_pts[j]], color) # up face
+        #     image_with_aabbmask = cv2.addWeighted(image_with_aabbmask,1.0,mask,0.4,0)
         pass
     return image_with_aabbmask.astype(np.float32)/255.0

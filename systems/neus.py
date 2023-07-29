@@ -32,19 +32,19 @@ class NeuSSystem(BaseSystem):
             poses = self.poses[batch['pose_idx']]
             dirs = batch['directions']
             # dirs = self.directions
-            rays_o, rays_d = get_rays(dirs,poses)
+            rays_o, rays_d = get_rays(dirs,poses[None,...])
             del dirs,poses
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,poses_=self.poses,aabb_=self.model.scene_aabb[None,...],img_wh=self.train_dataset.img_wh)
-            draw_poses(poses_=self.poses,aabb_=self.model.scene_aabb[None,...])
+            # draw_poses(poses_=self.poses,aabb_=self.model.scene_aabb[None,...])
             
             return self.model(rays_o, rays_d,split)#返回render结果
         else:
             poses = self.test_poses[batch['pose_idx']]
             dirs = self.test_directions# 一副图像
-            rays_o, rays_d = get_rays(dirs,poses)
+            rays_o, rays_d = get_rays(dirs,poses[None,...])
             del dirs
-            rays_o = rays_o.split(self.config.dataset.split_num)
-            rays_d = rays_d.split(self.config.dataset.split_num)
+            rays_o = rays_o.split(self.config.dataset.ray_sample.split_num)
+            rays_d = rays_d.split(self.config.dataset.ray_sample.split_num)
             return self.model.render_whole_image(rays_o,rays_d)
             
     def training_step(self, batch, batch_idx):
@@ -57,16 +57,22 @@ class NeuSSystem(BaseSystem):
         }
         """
         
-        if self.global_step%self.config.model.grid_update_freq == 0 and self.config.model.use_raymarch :
+        if self.global_step%self.config.model.occ_grid.grid_update_freq == 0 and self.config.model.point_sample.use_raymarch :
             self.model.update_step(5,self.global_step)
         render_out = self(batch,split='train')
+        
+        if self.config.dataset.ray_sample.use_dynamic_sample:
+            train_num_rays = int(self.train_dataset.train_num_rays * (self.train_num_samples / render_out['num_samples'].sum().item()))        
+            self.train_dataset.train_num_rays = min(int(self.train_dataset.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.ray_sample.max_train_num_rays)
+        
         loss_d = self.loss(render_out, batch)
         
         loss = sum(lo.mean() for lo in loss_d.values())
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log("depth", render_out['depth'].mean(),prog_bar=True,sync_dist=True)
+        self.log("train_num_rays", self.train_dataset.train_num_rays,prog_bar=True,sync_dist=True)
         
-        self.log('sdf_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
+        # self.log('sdf_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
         # self.log('tex_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True,sync_dist=True)
         # self.log('var_lr', torch.tensor(self.net_opt.param_groups[2]['lr']), prog_bar=True,sync_dist=True)
         if 'inv_s' in render_out.keys():

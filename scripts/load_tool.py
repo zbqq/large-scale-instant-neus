@@ -66,7 +66,7 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
         for i in range(0,poses.shape[0]):
         # for i in range(0,poses.shape[0],int(poses.shape[0]/10)):
             center_camera=poses[i,:3,3:4]
-            xyz_camera=center_camera+poses[i,:3,:3]*0.5
+            xyz_camera=center_camera+poses[i,:3,:3]*2
             ax.scatter(center_camera[0,0],center_camera[1,0],center_camera[2,0],cmap="Reds")
             ax.plot([center_camera[0,0],xyz_camera[0,0]],[center_camera[1,0],xyz_camera[1,0]],[center_camera[2,0],xyz_camera[2,0]],color='r')
             ax.plot([center_camera[0,0],xyz_camera[0,1]],[center_camera[1,0],xyz_camera[1,1]],[center_camera[2,0],xyz_camera[2,1]],color='g')
@@ -97,8 +97,8 @@ def draw_poses(poses_:Union[Tensor,ndarray]=None,
             rays = rays_o+rays_d*3
         ax.scatter([rays_o[0,0]],[rays_o[0,1]],[rays_o[0,2]],color='r')
         
-        for i in range(0,rays_d.shape[0],int(rays_d.shape[0]/200)):
-        # for i in range(0,rays_d.shape[0]):
+        # for i in range(0,rays_d.shape[0],int(rays_d.shape[0]/200)):
+        for i in range(0,rays_d.shape[0]):
             ax.plot([rays_o[0,0],rays[i,0]],[rays_o[0,1],rays[i,1]],[rays_o[0,2],rays[i,2]],color='b')
         
         

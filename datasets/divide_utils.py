@@ -68,8 +68,10 @@ class divideTool():
         pts = torch.tensor(np.loadtxt(self.new_pts3d_path,usecols=(0,1,2)),dtype=torch.float32)
         cameras_position = self.poses[:,:,3]#[M,3]
 
-        max_position = torch.max(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
-        min_position = torch.min(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
+        # max_position = torch.max(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
+        # min_position = torch.min(torch.cat([pts,cameras_position],dim=0),dim=0)[0]
+        max_position = torch.max(pts,dim=0)[0]
+        min_position = torch.min(pts,dim=0)[0]
         # max_position = torch.max(cameras_position,dim=0)[0]
         # min_position = torch.min(cameras_position,dim=0)[0]
         
@@ -77,7 +79,7 @@ class divideTool():
         
         
         radius = (max_position-min_position) / grid_dim / 2 # 前景radius
-        # radius[2] /= self.config.fb_ratio # 背景radius
+        # radius[2] /= self.config.aabb.fb_ratio # 背景radius
         ranges = max_position - min_position
         offsets = [torch.arange(s) * ranges[i] / s + ranges[i] / (s * 2) for i, s in enumerate(grid_dim)]#每个方格的中心world coordinate
         
@@ -130,9 +132,9 @@ class divideTool():
         elif self.config.name == 'blender':
             self.gen_centers_from_cameras(grid_dim)
         self.load_centers()#读取
-        self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
-        self.scales *= self.config.scale_zoom_up # 让前景有重叠
-        self.fg_scales = self.scales * self.config.fb_ratio
+        self.scale_to(scale=self.config.aabb.scale_to,current_model_idx=self.current_model_num)
+        self.scales *= self.config.aabb.scale_zoom_up # 让前景有重叠
+        self.fg_scales = self.scales * self.config.aabb.fb_ratio
         self.aabbs = torch.concat([self.centers-self.scales,self.centers+self.scales],dim=-1)
         self.fg_aabbs = torch.concat([self.centers-self.fg_scales,self.centers+self.fg_scales],dim=-1)
         # 放缩到2,4,8,...

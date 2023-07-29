@@ -77,7 +77,7 @@ class ColmapDataset(BaseDataset,divideTool):
         self.R_correct = self.get_R_correct()
         #校正poses，这里的poses是所有的poses
         self.poses = (self.R_correct[None,...] @ torch.linalg.inv(w2c_mats))[perm, :3] # (N_images, 3, 4) cam2world matrices
-        
+        # self.poses_inv = (w2c_mats @ self.R_correct.T[None,...])[perm, :3]
         self.grid_dim = torch.tensor([self.config.grid_X,
                              self.config.grid_Y,
                              1])
@@ -95,7 +95,7 @@ class ColmapDataset(BaseDataset,divideTool):
         if self.split == 'train':
             self.load_centers()#从txt得到centers和scale
             self.load_mask()#从mask dir获得mask名字
-            self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)#放缩到指定尺度
+            self.scale_to(scale=self.config.aabb.scale_to,current_model_idx=self.current_model_num)#放缩到指定尺度
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.poses = [self.poses[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
@@ -105,7 +105,7 @@ class ColmapDataset(BaseDataset,divideTool):
         if self.split == 'test':
             self.load_centers()
             self.load_mask()
-            self.scale_to(scale=self.config.scale_to,current_model_idx=self.current_model_num)
+            self.scale_to(scale=self.config.aabb.scale_to,current_model_idx=self.current_model_num)
             # del self.poses
 
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]
@@ -115,44 +115,51 @@ class ColmapDataset(BaseDataset,divideTool):
         
         if self.split == 'merge_test':
             self.load_mask()
-            self.load_centers() # colmap尺度下
-            model_idxs=torch.tensor([int(idx) for idx in self.config.merge_modules.split(',')])
-            center = torch.mean(self.centers[model_idxs],dim=0)
-            aabb = torch.concat(\
-            [torch.min(self.aabbs[:,:3],dim=0)[0],
-            torch.max(self.aabbs[:,3:],dim=0)[0],
-            ])
-            # center = self.aabb[:3]+self.aabb[3:]
-            scale = center - aabb[:3]
-            offset = center.view(3,1)
-            offset[2]=9.9
-            h = (aabb[2]-(aabb[5]-aabb[2])*0.8)
-            self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.3,offset=offset,n_poses=250)
-            # self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.4,mean_h=h,n_poses=20)
-            # self.poses_traj[:,:2,3] += center[:2].reshape(1,2)
+            # self.load_centers() # colmap尺度下
             
-            self.w2cs = torch.linalg.inv(
-                torch.concat(
-                    [self.poses_traj,bottom.expand([self.poses_traj.shape[0],1,4])]
-                ,1))[:,:3,:]
             
-            # draw_poses(poses_=self.poses_traj,aabb_=self.aabbs,aabb_idx=[5,6,9,10])
-            # rays_o, rays_d = get_rays(self.directions,self.poses_traj[0])
-            
-            # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.aabbs[[5,6,9,10]],aabb_idx=[1],img_wh=self.img_wh)
-            
-            # from utils.ray_utils import get_aabb_imgmask
-            # import cv2
-            # imgmask_pts = get_aabb_imgmask(self.aabbs[10],self.w2cs[0],self.K)
-            # image = np.array(np.random.rand(self.img_wh[1],self.img_wh[0],3)*255,dtype=np.uint8)
-            # image2 = image.copy()
-            # color = (0,0,255,0.5)
-            # imgmask_pts = [pts for pts in imgmask_pts]
-            # # for i in range(0,len(imgmask_pts)):
-            # for i in range(0,1):
-            #     if i in [0,2,3]:
-            #         image2 = cv2.fillPoly(image2, [imgmask_pts[i]], color)
-            # # image2 = cv2.fillPoly(image2,imgmask_pts,color)
-            # image = cv2.addWeighted(image,0.7,image2,0.8,0)
-            # cv2.imwrite('./test.png',image)
         pass
+    def gen_traj(self,centers:Tensor,aabbs:Tensor):
+        self.aabbs = aabbs
+        model_idxs=torch.tensor([int(idx) for idx in self.config.merge_modules.split(',')])
+        center = torch.mean(centers[model_idxs],dim=0) # 
+        aabb = torch.concat(\
+        [torch.min(aabbs[:,:3],dim=0)[0], # 
+        torch.max(aabbs[:,3:],dim=0)[0],
+        ])
+        bottom = torch.tensor([[0, 0, 0, 1.]])
+        # center = aabb[:3]+aabb[3:]
+        scale = center - aabb[:3]
+        offset = center.view(3,1)
+        offset[2] = -0.1
+        # h = (aabb[2]-(aabb[5]-aabb[2])*0.8) #DJI951
+        # h = (aabb[2]-(aabb[5]-aabb[2])*0.8) #compsite
+        # self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.35,offset=offset,n_poses=250)
+        self.poses_traj = create_spheric_poses(radius=torch.cat([scale[:2]*0.4,torch.tensor([1.])]).view(3,1),offset=offset,n_poses=250)
+        # self.poses_traj = create_spheric_poses(radius=torch.min(scale[:2])*0.4,mean_h=h,n_poses=20)
+        # self.poses_traj[:,:2,3] += center[:2].reshape(1,2) #[N,3,4]
+        
+        self.w2cs = torch.linalg.inv(
+            torch.concat(
+                [self.poses_traj,bottom.expand([self.poses_traj.shape[0],1,4])]
+            ,1))[:,:3,:]
+        
+        # draw_poses(poses_=self.poses_traj,aabb_=aabbs,aabb_idx=[0,1,2,3])
+        # rays_o, rays_d = get_rays(self.directions,self.poses_traj[0])
+        pass
+        # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabbs[[5,6,9,10]],aabb_idx=[1],img_wh=self.img_wh)
+        
+        # from utils.ray_utils import get_aabb_imgmask
+        # import cv2
+        # imgmask_pts = get_aabb_imgmask(aabbs[10],self.w2cs[0],self.K)
+        # image = np.array(np.random.rand(self.img_wh[1],self.img_wh[0],3)*255,dtype=np.uint8)
+        # image2 = image.copy()
+        # color = (0,0,255,0.5)
+        # imgmask_pts = [pts for pts in imgmask_pts]
+        # # for i in range(0,len(imgmask_pts)):
+        # for i in range(0,1):
+        #     if i in [0,2,3]:
+        #         image2 = cv2.fillPoly(image2, [imgmask_pts[i]], color)
+        # # image2 = cv2.fillPoly(image2,imgmask_pts,color)
+        # image = cv2.addWeighted(image,0.7,image2,0.8,0)
+        # cv2.imwrite('./test.png',image)

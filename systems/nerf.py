@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 import os
 import cv2
 from torch.utils.data import DataLoader
-# from utils.ray_utils import get_rays
+from utils.ray_utils import get_rays
 # from apex.optimizers import FusedAdam
 from systems.base import BaseSystem
 from scripts.load_tool import draw_poses
@@ -14,31 +14,11 @@ from utils.utils import load_ckpt_path
 from skimage.metrics import peak_signal_noise_ratio as psnr
 
 
-def get_rays(directions, c2w, keepdim=False):
-    # Rotate ray directions from camera coordinate to the world coordinate
-    # rays_d = directions @ c2w[:, :3].T # (H, W, 3) # slow?
-    assert directions.shape[-1] == 3
-
-    if directions.ndim == 2: # (N_rays, 3)
-        assert c2w.ndim == 3 # (N_rays, 4, 4) / (1, 4, 4)
-        rays_d = (directions[:,None,:] * c2w[:,:3,:3]).sum(-1) # (N_rays, 3)
-        rays_o = c2w[:,:,3].expand(rays_d.shape)
-    elif directions.ndim == 3: # (H, W, 3)
-        if c2w.ndim == 2: # (4, 4)
-            rays_d = (directions[:,:,None,:] * c2w[None,None,:3,:3]).sum(-1) # (H, W, 3)
-            rays_o = c2w[None,None,:,3].expand(rays_d.shape)
-        elif c2w.ndim == 3: # (B, 4, 4)
-            rays_d = (directions[None,:,:,None,:] * c2w[:,None,None,:3,:3]).sum(-1) # (B, H, W, 3)
-            rays_o = c2w[:,None,None,:,3].expand(rays_d.shape)
-
-    if not keepdim:
-        rays_o, rays_d = rays_o.reshape(-1, 3), rays_d.reshape(-1, 3)
-
-    return rays_o, rays_d
 
 class NeRFSystem(BaseSystem):
     def __init__(self,config):
         super().__init__(config)#最初的config
+        
         pass
     def on_train_start(self):
         # self.model.mark_invisible_cells(self.train_dataset.K.to(self.device),
@@ -61,6 +41,7 @@ class NeRFSystem(BaseSystem):
     
     def forward(self, batch,split):
         if split == 'train':
+            self.model.point_sample_random = self.config.model.point_sample.use_random
             # poses = batch['pose']
             poses = self.poses[batch['pose_idx']]
             dirs = batch['directions']
@@ -73,12 +54,13 @@ class NeRFSystem(BaseSystem):
             
             return self.model(rays_o, rays_d,split)#返回render结果
         else:
+            self.model.point_sample_random
             poses = self.test_poses[batch['pose_idx']]
             dirs = self.test_directions# 一副图像
             rays_o, rays_d = get_rays(dirs,poses[None,...])
             del dirs
-            rays_o = rays_o.split(self.config.dataset.split_num)
-            rays_d = rays_d.split(self.config.dataset.split_num)
+            rays_o = rays_o.split(self.config.dataset.ray_sample.split_num)
+            rays_d = rays_d.split(self.config.dataset.ray_sample.split_num)
             return self.model.render_whole_image(rays_o,rays_d)
             
     def training_step(self, batch, batch_idx):
@@ -90,16 +72,20 @@ class NeRFSystem(BaseSystem):
         }
         """
         
-        if self.global_step%self.config.model.grid_update_freq == 0 and self.config.model.use_raymarch :
+        if self.global_step%self.config.model.occ_grid.grid_update_freq == 0 and self.config.model.point_sample.use_raymarch :
             self.model.update_step(5,self.global_step)
         render_out = self(batch,split='train')
-        loss_d = self.loss(render_out, batch)
+        if self.config.dataset.ray_sample.use_dynamic_sample:
+            train_num_rays = int(self.train_dataset.train_num_rays * (self.train_num_samples / render_out['num_samples'].sum().item()))        
+            self.train_dataset.train_num_rays = min(int(self.train_dataset.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.ray_sample.max_train_num_rays)
         
+        loss_d = self.loss(render_out, batch)
         loss = sum(lo.mean() for lo in loss_d.values())
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log("depth", render_out['depth'].mean(),prog_bar=True,sync_dist=True)
+        self.log("train_num_rays", self.train_dataset.train_num_rays,prog_bar=True,sync_dist=True)
         
-        self.log('geo_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
+        # self.log('geo_lr', torch.tensor(self.net_opt.param_groups[0]['lr']), prog_bar=True,sync_dist=True)
         # self.log('color_lr', torch.tensor(self.net_opt.param_groups[1]['lr']), prog_bar=True,sync_dist=True)
         with torch.no_grad():
             pred = render_out['rgb'].to("cpu").numpy()

@@ -9,7 +9,8 @@ import numpy as np
 import trimesh
 from nerfacc import rendering, ray_marching, OccupancyGrid, ContractionType,ray_aabb_intersect
 import time
-from utils.render import up_sample,cat_z_vals,get_rays_indices,get_alphas
+from .nerf import vanillaNeRF
+# utils.render import 
 import math
 import torch.nn.functional as F
 from omegaconf import OmegaConf
@@ -18,7 +19,7 @@ from torch.cuda.amp import custom_fwd, custom_bwd
 from .custom_functions import TruncExp
 import torch
 from torch import nn
-from utils.render import render_from_raymarch,render_from_cdf
+from utils.render import up_sample,cat_z_vals,get_rays_indices
 from .tcnn_nerf import SDF,RenderingNet,VarianceNetwork
 from .loss import NeRFLoss
 import tinycudann as tcnn
@@ -61,9 +62,9 @@ class mainModule(baseModule):
         self.register_buffer('center',(self.scene_aabb[:3]+self.scene_aabb[3:])/2)
         self.register_buffer('scale',self.center - self.scene_aabb[:3])
         
-        if self.config.use_raymarch:
+        if self.config.point_sample.use_raymarch:
             self.C = 1+max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
-            self.H = self.config.grid_resolution
+            self.H = self.config.occ_grid.grid_resolution
             self.register_buffer('density_bitfield',
                     torch.zeros(self.C*self.H**3//8, dtype=torch.uint8))
             self.register_buffer('density_grid',
@@ -89,7 +90,6 @@ class mainModule(baseModule):
             pass
         
         groups_idx = torch.cat(groups_idx,dim=-1) # [N C]
-        
         overlap_num = groups_idx.sum(dim=-1) # [N 1]
         assert overlap_num.all()
         overlap_idx = overlap_num > 1 # [N 1]
@@ -144,15 +144,15 @@ class mainModule(baseModule):
         
         
     
-    def get_alpha(self, sigma, dists):#计算
-
+    def get_alpha(self, geo, dists):#计算
+        sigma = geo['sigma'].view(-1,1)
         alphas = torch.ones_like(sigma) - torch.exp(- sigma * dists)
 
         return alphas.view(-1,1)
     def forward(self,rays_o,rays_d,weights_type=None,perturb=True):# [N_rays 3] [N_rays,3]
         
         device = rays_o.device
-        fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.fb_ratio
+        fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*self.config.aabb.fb_ratio
         N = rays_o.shape[0]
         results = torch.empty(0)
         scene_aabb =self.scene_aabb.clone()
@@ -183,10 +183,9 @@ class mainModule(baseModule):
             nears,fars = near_far_from_aabb(# [N_rays 1]
                     rays_o_batch,rays_d_batch,scene_aabb,0.02
             )
-            # draw_poses(rays_o_=rays_o_batch,rays_d_=rays_d_batch,aabb_=aabb[None,...],t_min=nears,t_max=fars)
         
             # sample 
-            if self.config.use_raymarch: # raymarch 采样
+            if self.config.point_sample.use_raymarch: # raymarch 采样
                 rays_o_batch_rectified = rays_o_batch - self.center.view(-1,3)
                 # scene_aabb =self.scene_aabb - self.center.repeat([2])
                 xyzs, dirs, ts, rays = \
@@ -194,20 +193,22 @@ class mainModule(baseModule):
                                 True, self.density_bitfield, 
                                 self.C, self.H, 
                                 nears, fars, perturb, 
-                                self.config.dt_gamma, self.config.num_samples_per_ray,)
+                                self.config.point_sample.ray_march.dt_gamma, self.config.point_sample.num_samples_per_ray,)
                 xyzs += self.center.view(-1,3)
                 dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
             
             else: # 逆CDF采样
-                n_rays,n_samples = rays_o_batch.shape[0],self.config.num_samples_per_ray
+                n_rays,n_samples = rays_o_batch.shape[0],self.config.point_sample.num_samples_per_ray
                 z_vals = torch.linspace(0.0, 1.0, n_samples,device=device).view(1,-1)
                 z_vals = nears.view(-1,1) + (fars - nears).view(-1,1) * z_vals # [N_samples]
                 with torch.no_grad(): 
                     sample_dist = (fars - nears).view(-1,1) / n_samples
 
-                    for _ in range(0,self.config.up_sample_steps):
+                    for _ in range(0,self.config.point_sample.inv_cdf.up_sample_steps):
 
-                        z_vals_sample = up_sample(rays_o_batch,rays_d_batch,z_vals,self.config.n_importance,sample_dist,self.geometry_network,self.get_alpha)
+                        z_vals_sample = up_sample(rays_o_batch,rays_d_batch,z_vals,\
+                            self.config.point_sample.inv_cdf.n_importance,sample_dist,model_name=self.config.name,
+                            geometry_network=self.geometry_network,get_alphas=self.get_alpha)
                         z_vals = cat_z_vals(rays_o_batch,rays_d_batch,z_vals,z_vals_sample)
 
                 xyzs = rays_o_batch[:, None, :] + rays_d_batch[:, None, :] * z_vals[..., :, None] # [N_rays, N_samples, 3]
@@ -235,9 +236,10 @@ class mainModule(baseModule):
             
             if self.config.rendering_from_alpha:
                 if self.config.color_network.use_normal:
-                    alphas = self.get_alpha(sigmas,normals,dirs,ts[:,1])
+                    alphas = self.get_alpha({'sigma':sigmas,'normal':normals,'dir':dirs}
+                                            ,ts[:,1])
                 else:
-                    alphas = self.get_alpha(sigmas,ts[:,1:2])
+                    alphas = self.get_alpha({'sigma':sigmas},ts[:,1:2])
                 image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o_batch.shape[0])
                 results = torch.cat([image,depth],dim=-1)
             
@@ -289,7 +291,7 @@ class mainModule(baseModule):
         self.iter_density += 1
 
         # convert to bitfield
-        density_thresh = min(self.mean_density, self.config.density_thresh)
+        density_thresh = min(self.mean_density, self.config.occ_grid.density_thresh)
         self.density_bitfield = packbits(self.density_grid.detach(), density_thresh, self.density_bitfield)
 
         # print(f'[density grid] min={self.density_grid.min().item():.4f}, max={self.density_grid.max().item():.4f}, mean={self.mean_density:.4f}, occ_rate={(self.density_grid > density_thresh).sum() / (128**3 * self.cascade):.3f}')

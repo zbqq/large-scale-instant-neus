@@ -41,6 +41,8 @@ class baseModule(nn.Module):
     def __init__(self,config):#config.model
         super().__init__()
         self.config = config
+        
+        self.point_sample_random = self.config.point_sample.use_random
         # L = 16; F = 2; log2_T = 19; N_min = 16
         # b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
         # self.render_step_size = 1.732 * 2 * self.config.radius_z / self.config.num_samples_per_ray
@@ -50,19 +52,18 @@ class baseModule(nn.Module):
     def setup(self,center,scale):#这里的center，scale和divide中的背景aabb一致
         # self.center = center
         # self.scale = scale
-        # center=torch.tensor([0.0,0.0,0.0]).to(center.device)
-        # scale = torch.tensor([1.5,1.5,1.5]).to(center.device)
+        center=torch.tensor([0.0, 0.0, 0.0]).to(center.device)
+        scale = torch.tensor([1.5, 1.5, 1.5]).to(center.device)
         
         
         self.register_buffer('center',center)#这是已经scale to的尺度
-        self.register_buffer('scale',scale*self.config.scale_zoom_up)
-        self.register_buffer('fg_scale',scale*self.config.scale_zoom_up*self.config.fb_ratio)
-        self.C = max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
-        self.H = self.config.grid_resolution
+        self.register_buffer('scale',scale*self.config.aabb.scale_zoom_up)
+        self.register_buffer('fg_scale',scale*self.config.aabb.scale_zoom_up * self.config.aabb.fb_ratio)
         
+
         self.geometry_network.setup(self.center,self.scale)
         # self.render_step_size = 1.732 * 2.5 * max(scale)/ self.config.num_samples_per_ray
-        self.render_step_size = 1.732 * 2 * scale[2]/ self.config.num_samples_per_ray
+        self.render_step_size = 1.732 * 2 * scale[2]/ self.config.point_sample.num_samples_per_ray
         # 无人机视角下不包含
         
         self.register_buffer('scene_aabb', \
@@ -77,11 +78,14 @@ class baseModule(nn.Module):
             self.center + self.fg_scale
             ))
         )
-        if self.config.grid_prune and self.config.use_raymarch:
-            if self.config.use_nerfacc:
+        if self.config.occ_grid.grid_prune and self.config.point_sample.use_raymarch:
+            self.C = max(1+int(np.ceil(np.log2(2*max(self.scale)))), 1)
+            self.H = self.config.occ_grid.grid_resolution
+        
+            if self.config.point_sample.use_nerfacc:
                 self.occupancy_grid = OccupancyGrid(
                     roi_aabb=self.scene_aabb,
-                    resolution=self.config.grid_resolution,
+                    resolution=self.H,
                     contraction_type=ContractionType.AABB
                 )
             else:
@@ -95,12 +99,7 @@ class baseModule(nn.Module):
             pass
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
         raise NotImplementedError
-    def preprocess_data(self,batch,stage):
-        
-        
-        
-        
-        pass
+    
     def forward(self,rays_o,rays_d,split):
         raise NotImplementedError
     def render_whole_image(self,rays_o:Tensor,rays_d:Tensor):
@@ -126,15 +125,23 @@ class baseModule(nn.Module):
         rays_o = rays_o.contiguous()
         rays_d = rays_d.contiguous()
         aabb = self.scene_aabb.clone()
-        aabb[0:2] -= self.scale[:2] * 10
-        aabb[3:5] += self.scale[:2] * 10#扩大一点使得far不会终止到aabb上
         
-        # aabb[0:3] -= self.scale[:3] * 2
-        # aabb[3:6] += self.scale[:3] * 2#扩大一点使得far不会终止到aabb上
-
-        nears,fars = near_far_from_aabb( # 位移不改变nears，fars
-            rays_o,rays_d,aabb,0.02#确定far时需要把射线打到地面上，而不是在边界
-        )
+        
+        if self.config.point_sample.use_contract or not self.config.point_sample.use_raymarch:
+            # if self.config.aabb.use_scaleup:# 在大场景分块算法中射线不能被截断
+            # aabb[0:2] -= self.scale[:2] * 10
+            # aabb[3:5] += self.scale[:2] * 10#扩大一点使得far不会终止到aabb上
+            
+            # aabb[0:3] -= self.scale[:3] * 1
+            # aabb[3:6] += self.scale[:3] * 1
+            pass
+        # nears,fars = near_far_from_aabb( # 位移不改变nears，fars
+        #     rays_o,rays_d,aabb,torch.tensor([0.02],device = rays_o.device)#确定far时需要把射线打到地面上，而不是在边界
+        # )
+        # nears,fars = near_far_from_aabb( # 位移不改变nears，fars
+        #     rays_o,rays_d,aabb#确定far时需要把射线打到地面上，而不是在边界
+        # )
+        nears,fars = ray_aabb_intersect(rays_o,rays_d,aabb)
         
         # fars *= 1.1
         # valid_idx = fars<20
@@ -143,19 +150,21 @@ class baseModule(nn.Module):
         # nears = nears[valid_idx]
         # fars = fars[valid_idx]        
         if cam_near_far is not None:
-            nears = torch.minimum(nears, cam_near_far[:, 0])
-            fars = torch.minimum(fars, cam_near_far[:, 1])
+            # nears = torch.minimum(nears, cam_near_far[:, 0])
+            # fars = torch.minimum(fars, cam_near_far[:, 1])
+            pass
         # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabb[None,...],t_min=nears,t_max=fars)
         
         # mix background color
         if bg_color is None:
             bg_color = 1
         
-        if self.config.use_raymarch:
+        if self.config.point_sample.use_raymarch:
             results = render_from_raymarch(
                 rays_o,rays_d,self.center,self.scale,self.density_bitfield,
                 self.C,self.H,nears,fars,self.config,perturb,
-                split=split,aabb=aabb,
+                split=split,aabb=aabb,contract=self.config.point_sample.use_contract,
+                bkgd_color=self.background_color,
                 geometry_network=self.geometry_network,
                 color_network=self.color_network,
                 get_alphas=self.get_alpha
@@ -165,7 +174,7 @@ class baseModule(nn.Module):
                 rays_o,rays_d,
                 nears,fars,
                 config=self.config,b_bg=aabb,
-                up_sample_steps=self.config.up_sample_steps,
+                up_sample_steps=self.config.point_sample.inv_cdf.up_sample_steps,
                 geometry_network=self.geometry_network,
                 color_network=self.color_network,
                 get_alphas=self.get_alpha
@@ -194,7 +203,7 @@ class baseModule(nn.Module):
 
                             # cascading
                             for cas in range(self.C):
-                                bound = torch.min(torch.ones_like(self.scale)*2 ** cas, self.scale).view(-1,3)
+                                bound = torch.min(torch.ones_like(self.scale)*2 ** cas, self.scale).view(-1,3) * torch.tensor([3.,3.,1.],device=self.scale.device)
                                 half_grid_size = bound / self.H
                                 # scale to current cascade's resolution
                                 cas_xyzs = xyzs * (bound - half_grid_size) + self.center.view(-1,3)
@@ -209,16 +218,23 @@ class baseModule(nn.Module):
                                 tmp_grid[cas, indices] = sigmas.to(torch.float32)
 
             # partial update (half the computation)
+            
             else:
                 N = self.H ** 3 // 4 # H * H * H / 4
-                for cas in range(self.C):
+                for cas in range(self.C): 
                     # random sample some positions
+                    
+                    
                     coords = torch.randint(0, self.H, (N, 3), device=self.scene_aabb.device) # [N, 3], in [0, 128)
                     indices = morton3D(coords).long() # [N]
                     # random sample occupied positions
-                    occ_indices = torch.nonzero(self.density_grid[cas] > 0).squeeze(-1) # [Nz]
-                    rand_mask = torch.randint(0, occ_indices.shape[0], [N], dtype=torch.long, device=self.scene_aabb.device)
-                    occ_indices = occ_indices[rand_mask] # [Nz] --> [N], allow for duplication
+                    # occ_indices = torch.nonzero(self.density_grid[cas] > 0).squeeze(-1) # [Nz]
+                    occ_indices = torch.nonzero(self.density_grid[cas]).squeeze(-1) # [Nz]
+                    if len(occ_indices) > N:
+                        rand_mask = torch.randint(len(occ_indices),(N,),device=self.density_bitfield.device)
+                    
+                    # rand_mask = torch.randint(0, occ_indices.shape[0], [N], dtype=torch.long, device=self.scene_aabb.device)
+                        occ_indices = occ_indices[rand_mask] # [Nz] --> [N], allow for duplication
                     occ_coords = morton3D_invert(occ_indices) # [N, 3]
                     # concat
                     indices = torch.cat([indices, occ_indices], dim=0)
@@ -226,7 +242,7 @@ class baseModule(nn.Module):
                     # same below
                     xyzs = 2 * coords.float() / (self.H - 1) - 1 # [N, 3] in [-1, 1]
                     # bound = min(2 ** cas, max(self.scale))
-                    bound = torch.min(torch.ones_like(self.scale)*2 ** cas, self.scale)
+                    bound = torch.min(torch.ones_like(self.scale)*2 ** cas, self.scale) * torch.tensor([3.,3.,1.],device=self.scale.device)
                     half_grid_size = bound / self.H
                     # scale to current cascade's resolution
                     cas_xyzs = xyzs * (bound - half_grid_size).view(-1,3) + self.center.view(-1,3)
@@ -250,7 +266,7 @@ class baseModule(nn.Module):
         self.iter_density += 1
 
         # convert to bitfield
-        density_thresh = min(self.mean_density*0.99, self.config.density_thresh)
+        density_thresh = min(self.mean_density*decay, self.config.occ_grid.density_thresh)
         self.density_bitfield = packbits(self.density_grid.detach(), density_thresh, self.density_bitfield)
 
         # print(f'[density grid] min={self.density_grid.min().item():.4f}, max={self.density_grid.max().item():.4f}, mean={self.mean_density:.4f}, occ_rate={(self.density_grid > density_thresh).sum() / (128**3 * self.cascade):.3f}')

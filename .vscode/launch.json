@@ -16,11 +16,11 @@
             // "program": "./bin2ply.py",
             
             // "program": "./datasets/datasets.py",
-            // "program": "./load_tool.py",
+            // "program": "./scripts/load_tool.py",
             // "program": "./preprocess/imgs2poses.py",//稀疏重建生成位姿
             // "program": "./preprocess/gen_cameras.py",
             // "program": "./postprocess/command_line.py",//稠密重建
-            // "program": "./load_tool.py",//画位姿
+            // "program": "./scripts/load_tool.py",//画位姿
             // "program": "./preprocess/cluster_mask.py",//
             // "program": "./model/tcnn_nerf.py",//
             
@@ -33,10 +33,11 @@
             "args": [
                     //  test.py/datasets.py
                 // "--conf","./conf/conf_tcnn.json",
-                // "--conf_path","./config/neus-colmap.yaml",
-                // "--conf_path","./config/neus-blender.yaml",
                 // "--conf_path","./config/nerf-blender.yaml",
-                "--conf_path","./config/nerf-colmap.yaml",
+                // "--conf_path","./config/nerf-colmap.yaml",
+
+                "--conf_path","./config/neus-blender.yaml",
+                // "--conf_path","./config/neus-colmap.yaml",
                 // "--conf","/home/will/test/L-NeRF/conf/conf.json",
                 "--gpu","0",
                 "--num_epochs","1",

@@ -8,7 +8,7 @@ from einops import rearrange
 class _near_far_from_aabb(torch.autograd.Function):
     @staticmethod
     @custom_fwd(cast_inputs=torch.float32)
-    def forward(ctx, rays_o, rays_d, aabb, min_near=0.2):
+    def forward(ctx, rays_o, rays_d, aabb, min_near=None):
         ''' near_far_from_aabb, CUDA implementation
         Calculate rays' intersection time (near and far) with aabb
         Args:
@@ -145,7 +145,7 @@ class _march_rays_train(torch.autograd.Function):
         step_counter = torch.zeros(1, dtype=torch.int32, device=rays_o.device) # point counter, ray counter
         
         if perturb:
-            noises = torch.rand(N, dtype=rays_o.dtype, device=rays_o.device)*0.01
+            noises = torch.rand(N, dtype=rays_o.dtype, device=rays_o.device)*0.001
         else:
             noises = torch.zeros(N, dtype=rays_o.dtype, device=rays_o.device)
             
@@ -495,8 +495,25 @@ def rendering_with_alpha(alphas,rgbs,ts,rays,n_rays):
     )
     return colors,opacities,depths
 
-    
-
+class _progressive_mask(torch.autograd.Function):
+    """
+    """
+    @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
+    def forward(ctx,feature,level,mask_type="fwd_mask",F=2):
+        assert feature.shape[1] == level.shape[1] * F
+        # [N L*F], [L*F]
+        if mask_type == "fwd_mask":
+            feature[:,~level] = 0
+        ctx.save_for_backward(feature,level,mask_type)
+        return feature
+    @staticmethod
+    @custom_bwd
+    def backward(ctx,feature_grad):
+        feature,level,mask_type = ctx.saved_tensors
+        if mask_type == "fwd_mask":
+            pass
+        return feature_grad
 
 
 

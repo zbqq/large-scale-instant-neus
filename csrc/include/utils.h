@@ -60,7 +60,7 @@ void near_far_from_aabb(
     const at::Tensor rays_d, 
     const at::Tensor aabb, 
     const uint32_t N, 
-    const float min_near, 
+    at::optional<at::Tensor> min_near, 
     at::Tensor nears, at::Tensor fars
 );
 

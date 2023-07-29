@@ -19,12 +19,12 @@ def params_from_models(camera_model:np.ndarray,downsample:float=1.0):
     K = torch.FloatTensor([[fx, 0, cx],
                             [0, fy, cy],
                             [0,  0,  1]])
-    # distortion = np.array([
-    #     camera_model[4],
-    #     camera_model[5],
-    #     camera_model[6],
-    #     camera_model[7]
-    # ])
+    distortion = np.array([
+        camera_model[4],
+        camera_model[5],
+        camera_model[6],
+        camera_model[7]
+    ])
     return K,distortion
 
 
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # assert dataset.camera_model == "OPENCV"
     # camera_models = np.loadtxt(os.path.join(config.root_dir,"sparse/0","cameras.txt"))
     camera_models = read_cameras_binary(os.path.join(config.root_dir,"sparse/0","cameras.bin"))
-    # K,distortion=params_from_models(camera_models[1].params)
+    K,distortion=params_from_models(camera_models[1].params)
     input_path = os.path.join(config.root_dir,'images')
     prefix = "images_undistorted_{}".format(config.dataset.downsample)
     output_path = os.path.join(config.root_dir,prefix)
@@ -53,7 +53,6 @@ if __name__ == '__main__':
     pbar = tqdm(total=len(file_paths))
     for file in file_paths:
         file_name = file.replace("images",prefix)
-        # os.makedirs(file_name,exist_ok=True)
         if os.path.isdir(file):
             os.makedirs(file_name,exist_ok=True)
             continue

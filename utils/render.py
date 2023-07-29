@@ -5,7 +5,7 @@ from scripts.load_tool import draw_poses
 from model.custom_functions import rendering_with_alpha,rendering_W_from_alpha,\
     march_rays_train, near_far_from_aabb, composite_rays_train, \
         morton3D, morton3D_invert, packbits,march_rays,composite_rays
-
+        
 # def get_alphas(sigma, dists):#计算
 #     alphas = torch.ones_like(sigma) - torch.exp(- sigma * dists)
 #     return alphas.view(-1,1)
@@ -20,7 +20,12 @@ def get_rays_indices(values):
     rays[:,1] = samples
     return rays
 
-    
+def sample_mipnerf():
+    pass
+
+
+
+
 def sample_pdf(bins, weights, n_sample_importance, det=False):#64个三维采样点，16个分位点
     # 根据pdf采样，pdf是由weight计算的
     # Get pdf
@@ -116,9 +121,9 @@ def render_from_cdf(\
     n_importance: int
     """
     device = rays_o.device
-    n_importance=config.n_importance
-    fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*config.fb_ratio
-    n_rays,n_samples = rays_o.shape[0],config.num_samples_per_ray
+    n_importance=config.point_sample.inv_cdf.n_importance
+    fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*config.aabb.fb_ratio
+    n_rays,n_samples = rays_o.shape[0],config.point_sample.num_samples_per_ray
     z_vals = torch.linspace(0.0, 1.0, n_samples,device=device).view(1,-1)
     z_vals = nears.view(-1,1) + (fars - nears).view(-1,1) * z_vals # [N_samples]
     
@@ -164,13 +169,12 @@ def render_from_cdf(\
     image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
     opacities = opacities.view(-1)
     results = {
-        'num_points':pts.shape[0],
         # 'weights':weights,
         # 'rays_valid':weights_sum>0,
         # 'opacity':torch.clamp(opacities,1e-12,1000),
         'opacity':opacities,
         'rays_valid':opacities>0,
-        'num_points':pts.shape[0],
+        'num_samples':torch.tensor(pts.shape[0]),
         }
     results['depth']=depth
     results['rgb']=image
@@ -181,7 +185,7 @@ def render_from_raymarch(\
     rays_o,rays_d,
     center,scale,density_bitfield,
     C,H,nears,fars,config,perturb,
-    split,aabb,
+    split,aabb,contract,bkgd_color,
     geometry_network=None,
     color_network=None,
     get_alphas = None
@@ -207,21 +211,22 @@ def render_from_raymarch(\
     # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=aabb[None,...])
                 
     
-    fb_ratio = torch.ones([1,1,1],dtype=torch.float32).to(device)*config.fb_ratio
+    fb_ratio = torch.ones([3],dtype=torch.float32).to(device)*config.aabb.fb_ratio
     results={}
     if split=='train' or split == 'val':
     # if split=='train':
         # with torch.no_grad():
         xyzs, dirs, ts, rays = \
             march_rays_train(rays_o, rays_d, scale, fb_ratio,
-                                    False, density_bitfield, 
+                                    contract, density_bitfield, 
                                     C, H, 
                                     nears, fars, perturb, 
-                                    config.dt_gamma, config.num_samples_per_ray,)
+                                    config.point_sample.ray_march.dt_gamma, config.point_sample.num_samples_per_ray,)
             
         # draw_poses(rays_o_=rays_o,rays_d_=rays_d,pts3d=xyzs.to('cpu'),aabb_=scene_aabb[None,...],t_min=nears,t_max=fars)
         # draw_poses(pts3d=xyzs.to('cpu'),aabb_=self.scene_aabb[None,...],t_min=nears,t_max=fars)
-        
+        # if xyzs.max().isinf():
+        #     draw_poses(rays_o_=rays_o,rays_d_=rays_d)
         xyzs += center.view(-1,3)
         dirs = dirs / torch.norm(dirs, dim=-1, keepdim=True)
         with torch.cuda.amp.autocast(enabled=config.fp16):
@@ -246,15 +251,15 @@ def render_from_raymarch(\
             else:
                 alphas = get_alphas(geo_output,ts[:,1:2])
             image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
-            opacities = opacities.view(-1)
+            # image=image+bkgd_color*(1.-opacities)
+            opacities = torch.clamp(opacities,1e-3,1.-1e-3).view(-1)
             results = {
-                'num_points':xyzs.shape[0],
                 # 'weights':weights,
                 # 'rays_valid':weights_sum>0,
                 # 'opacity':torch.clamp(opacities,1e-12,1000),
                 'opacity':opacities,
                 'rays_valid':opacities > 0,
-                'num_points':xyzs.shape[0],
+                'num_samples':torch.tensor(xyzs.shape[0]),
                 
             }
             if config.color_network.use_normal:
@@ -262,14 +267,13 @@ def render_from_raymarch(\
                 results['grad']=grad
         else:
             weights, weights_sum, depth, image = \
-                composite_rays_train(sigmas, rgbs, ts, rays, config.T_thresh)
+                composite_rays_train(sigmas, rgbs, ts, rays, config.point_sample.ray_march.T_thresh)
         
             results = {
-                'num_points':xyzs.shape[0],
                 'weights':weights,
                 # 'rays_valid':weights_sum>0,
-                'opacity':torch.clamp(weights_sum,1e-12,1000),
-                'num_points':xyzs.shape[0]
+                'opacity':torch.clamp(weights_sum,1e-3,1.-1e-3),
+                'num_samples':torch.tensor(xyzs.shape[0]),
             }
         # opacity = torch.clamp(weights_sum,1e-12,1000)
         
@@ -307,7 +311,7 @@ def render_from_raymarch(\
                 sigmas,feas = geo_output['sigma'],geo_output['fea']
                 rgbs = color_network(dirs,feas)
                 
-            composite_rays(n_alive, n_step, rays_alive, rays_t, sigmas, rgbs, ts, weights_sum, depth, image, config.T_thresh)
+            composite_rays(n_alive, n_step, rays_alive, rays_t, sigmas, rgbs, ts, weights_sum, depth, image, config.point_sample.ray_march.T_thresh)
             rays_alive = rays_alive[rays_alive >= 0]
             # print(f'step = {step}, n_step = {n_step}, n_alive = {n_alive}, xyzs: {xyzs.shape}')
             step += n_step

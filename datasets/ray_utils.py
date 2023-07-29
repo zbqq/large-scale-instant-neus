@@ -209,7 +209,7 @@ def create_spheric_poses(radius, offset=torch.tensor([0,0,0]).view(3,1), n_poses
     
     for psi in np.linspace(0, 2*np.pi, n_poses+1,dtype=np.float32)[:-1]:
         rays_o = offset + radius * torch.tensor([np.sin(psi),np.cos(psi),0],dtype=offset.dtype).view(3,1)
-        c2w = spheric_pose(0, -np.pi/8, psi)
+        c2w = spheric_pose(0, np.pi/5, psi)
         c2w[:,3:4] += rays_o #[3,4]
         spheric_poses += [c2w]
     return torch.stack(spheric_poses, 0)

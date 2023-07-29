@@ -17,7 +17,7 @@ class NeuS(baseModule):
         # self.render_step_size = 1.732 * 2 * self.config.aabb.radius_z / self.config.num_samples_per_ray
         
         self.geometry_network = SDF(self.config.geometry_network)
-        self.variance = VarianceNetwork(self.config.init_variance)
+        self.variance = VarianceNetwork(self.config.inv_cdf.init_variance)
         self.color_network = RenderingNet(self.config.color_network)
         
         # self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
@@ -25,9 +25,9 @@ class NeuS(baseModule):
         self.cos_anneal_ratio = 1.0
         # self.loss = NeRFLoss(lambda_distortion=0)
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
-        cos_anneal_end = self.config.get('cos_anneal_end', 0)
+        cos_anneal_end = self.config.inv_cdf.get('cos_anneal_end', 0)
         self.cos_anneal_ratio = 1.0 if cos_anneal_end == 0 else min(1.0, global_step / cos_anneal_end)
-        if self.config.use_nerfacc:
+        if self.config.point_sample.use_nerfacc:
             def occ_eval_fn(x):
                 sdf = self.geometry_network(x, with_grad=False, with_fea=False)['sigma']
                 inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
@@ -40,29 +40,10 @@ class NeuS(baseModule):
                 c = prev_cdf
                 alpha = ((p + 1e-5) / (c + 1e-5)).view(-1, 1).clip(0.0, 1.0)
                 return alpha
-            # def occ_eval_fn(x): # neus2's occ_eval_fn
-            #     sdf = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
-
-            #     inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)#可以做一点改动
-            #     inv_s = inv_s.expand(sdf.shape[0], 1)
-            #     density = inv_s*torch.sigmoid(inv_s*sdf[...,None])*torch.sigmoid(inv_s*sdf[...,None])*(1/torch.sigmoid(inv_s*sdf[...,None])-1)
-            #     # density = density.clip(0.0, 1.0) # 上限较低会导致某次更新后断崖式
-            #     return density.view(-1,1)
-                # return torch.ones_like(alpha,dtype=alpha.dtype)
-            # self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn,ema_decay=0.95)
             self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn)
             
         else:
-            #     return density.reshape(-1).detach()
-            
-            # def occ_eval_fn(x): # neus2's occ_eval_fn
-            #     sdf = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
 
-            #     inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)#可以做一点改动
-            #     inv_s = inv_s.expand(sdf.shape[0], 1)
-            #     density = inv_s*torch.sigmoid(inv_s*sdf[...,None])*torch.sigmoid(inv_s*sdf[...,None])*(1/torch.sigmoid(inv_s*sdf[...,None])-1)
-            #     # density = density.clip(0.0, 1.0) # 上限较低会导致某次更新后断崖式
-            #     return density.view(-1)
             def occ_eval_fn(x):
                 sdf = self.geometry_network(x, with_grad=False, with_fea=False)['sigma']
                 inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
@@ -104,7 +85,7 @@ class NeuS(baseModule):
         alpha = ((p + 1e-6) / (c + 1e-6)).view(-1).clip(0.0, 1.0)
         return alpha.reshape(-1,1)
     def forward(self,rays_o,rays_d,split):
-        if self.config.use_nerfacc:
+        if self.config.point_sample.use_nerfacc:
             sdf_grad_samples = []
 
 
@@ -153,7 +134,6 @@ class NeuS(baseModule):
                         alpha_thre = 0.0
                     )
 
-                # del t_min,t_max
             rgb, opacity, depth = rendering(
                 t_starts,
                 t_ends,
@@ -164,7 +144,8 @@ class NeuS(baseModule):
             )
             result = {
                 'rgb': rgb,
-                'opacity': opacity,
+                # 'opacity': opacity,
+                'opacity': torch.clamp(opacity,1.e-3,1.-1.e-3),
                 'depth': depth,
                 'rays_valid': opacity > 0,
                 'num_samples': torch.as_tensor([len(t_starts)], dtype=torch.int32, device=rays_o.device),

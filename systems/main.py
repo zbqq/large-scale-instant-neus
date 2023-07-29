@@ -54,46 +54,55 @@ class mainSystem(BaseSystem):
     
     def setup(self,stage):
         models=[]
+        centers=[]
+        aabbs=[]
         for i in self.model_idxs: # 加载模型
             ckpt_paths = os.listdir(os.path.join(self.model_dir,f'{i}/{self.config.model.name}/ckpts'))
             model_path = os.path.join(self.model_dir,f'{i}/{self.config.model.name}/ckpts',ckpt_paths[-1])
             term = torch.load(model_path)        
-            model = term['model']
+            model = term['model'] # 这里是直接取得ckpt的aabb，因此是scale后的，
             # del model['density_bitfield']
             # del model['density_grid']
             x = MODELS[self.config.model.name](config=self.config.model)
             x.setup(model['center'].cpu(),model['scale'].cpu())
             x.load_state_dict(model,strict=False)
             models.append(x)
+            centers.append(x.center)
+            aabbs.append(x.scene_aabb)
             del term
             del model
             pass
+        centers = torch.stack(centers)
+        aabbs = torch.stack(aabbs)
+        
         self.model = mainModule(config=self.config.model,sub_modules=models)
         
         self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='merge_test',downsample=self.config.dataset.test_downsample)
+        self.test_dataset.gen_traj(centers,aabbs)
         # self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=self.config.dataset.test_downsample)
         # self.register_buffer('poses',self.test_dataset.poses)
         self.register_buffer('test_directions', self.test_dataset.directions)
-        
+        self.register_buffer('aabbs',self.test_dataset.aabbs)
+        # self.register_buffer()
     def forward(self, pose,split):
         # poses = batch['pose']
         
         assert split == 'merge_test'
         
-        rays_o, rays_d = get_rays(self.test_directions,pose)
+        rays_o, rays_d = get_rays(self.test_directions,pose[None,...])
         return self.model(rays_o,rays_d,weights_type="UW")
 
     def test_step(self, batch,batch_idx):
-        
+        poses = self.test_dataset.poses_traj.to(self.device)
         self.model = self.model.to(self.device)
-        if self.config.model.use_raymarch:
+        if self.config.model.point_sample.use_raymarch:
             self.model.update_step(5,self.global_step)
-        pbar = tqdm(total=batch['poses'].shape[0])
+        pbar = tqdm(total=poses.shape[0])
         prefix = self.config.save_dir + f"/merge/{self.config.model.name}"
         os.makedirs(prefix,exist_ok=True)
-        aabbs = self.test_dataset.aabbs[self.model_idxs]
-        for idx in range(0,batch['poses'].shape[0]):
-            out = self(batch['poses'][idx],split='merge_test')
+        aabbs = self.aabbs[self.model_idxs]
+        for idx in range(0,poses.shape[0]):
+            out = self(poses[idx],split='merge_test')
 
             
 
@@ -117,7 +126,12 @@ class mainSystem(BaseSystem):
             ])
             pbar.update(1)
         return None
-        
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset,
+                          num_workers=0,
+                          persistent_workers=False,
+                          batch_size=None,
+                          pin_memory=False)
         
         
         

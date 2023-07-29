@@ -169,32 +169,18 @@ inline __host__ __device__ void __contract_rect(
 ) {
     
     // float3 pt = make_float3(pts[0],pts[1],pts[2]);
-    const float absx = fabsf(pt.x),absy = fabsf(pt.y),absz = fabsf(pt.z);
-    const float mag_max = fmaxf(absx,fmaxf(absy,absz));
+    float absx = fabsf(pt.x),absy = fabsf(pt.y),absz = fabsf(pt.z);
+    float mag_max = fmaxf(absx,fmaxf(absy,absz));
     float3 mag = make_float3(absx,absy,absz);
-    float bound_max=fmaxf(fmaxf(b3[0],b3[1]),b3[2]);
-    float factor[3]={b3[0]/b3[1], b3[1]/b3[2], b3[0]/b3[2]};
+    float bound_max = fmaxf(fmaxf(b3[0],b3[1]),b3[2]);
+    float factor[3] = {b3[0]/b3[1], b3[1]/b3[2], b3[0]/b3[2]};
     float Linf_x_scale = 1;
     float Linf_y_scale = 1;
     float Linf_z_scale = 1;
 
-    // if (mag_max > bound_max*0.85) {
-    //     // L-INF norm
-
-    //     // Linf_x_scale = (bound3.x - bound3.x*0.8 / mag_max) / mag_max;
-    //     // Linf_y_scale = (bound3.y - bound3.y*0.8 / mag_max) / mag_max;
-    //     // Linf_z_scale = (bound3.z - bound3.z*0.8 / mag_max) / mag_max;
-
-    //     Linf_x_scale = (b3[0] - b3[0]*0.85 / mag_max) / mag_max;
-    //     Linf_y_scale = (b3[1] - b3[1]*0.85 / mag_max) / mag_max;
-    //     Linf_z_scale = (b3[2] - b3[2]*0.85 / mag_max) / mag_max;
-
-
-    // }
-
     if (( mag.x > b3[0] * fb_ratio[0]) &&
-                      (mag.x/factor[0] >= mag.y) && 
-                      (mag.x/factor[2] >= mag.z)) {
+                      (mag.x/factor[0] > mag.y) && 
+                      (mag.x/factor[2] > mag.z)) {
         
         // printf("hello");
         Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.x)) / (mag.x);
@@ -205,8 +191,8 @@ inline __host__ __device__ void __contract_rect(
     }
 
     else if ( (mag.y > b3[1] * fb_ratio[1]) &&
-                           (mag.y >= mag.x/factor[0]) && 
-                           (mag.y/factor[1] >= mag.z)) {
+                           (mag.y > mag.x/factor[0]) && 
+                           (mag.y/factor[1] > mag.z)) {
 
         Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.y*factor[0])) / (mag.y*factor[0]);
         Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.y)) / (mag.y);
@@ -216,15 +202,15 @@ inline __host__ __device__ void __contract_rect(
     }
 
     else if ( ( mag.z > b3[2] * fb_ratio[2]) &&
-                           (mag.z >= mag.x/factor[2]) && 
-                           (mag.z >= mag.y/factor[1])) {
+                           (mag.z > mag.x/factor[2]) && 
+                           (mag.z > mag.y/factor[1])) {
 
         Linf_x_scale = (b3[0] - b3[0]*fb_ratio[0] * b3[0]*(1-fb_ratio[0]) / (mag.z*factor[2])) / (mag.z*factor[2]);
         Linf_y_scale = (b3[1] - b3[1]*fb_ratio[1] * b3[1]*(1-fb_ratio[1]) / (mag.z*factor[1])) / (mag.z*factor[1]);
         Linf_z_scale = (b3[2] - b3[2]*fb_ratio[2] * b3[2]*(1-fb_ratio[2]) / (mag.z)) / (mag.z);
 
     }
-    printf("hhh\n");
+    // printf("hhh\n");
     pt.x *= Linf_x_scale;
     pt.y *= Linf_y_scale;
     pt.z *= Linf_z_scale;
@@ -280,7 +266,7 @@ __global__ void kernel_near_far_from_aabb(
     const scalar_t * __restrict__ rays_d,
     const scalar_t * __restrict__ aabb,
     const uint32_t N,
-    const float min_near,
+    scalar_t * min_near,
     scalar_t * nears, scalar_t * fars
 ) {
     // parallel per ray
@@ -324,20 +310,31 @@ __global__ void kernel_near_far_from_aabb(
     if (near_z > near) near = near_z;
     if (far_z < far) far = far_z;
 
-    if (near < min_near) near = min_near;
-
+    const bool near_given = (min_near == nullptr);
+    if (!near_given) {
+        if (near < min_near[0]) 
+            near = min_near[0];
+    }
+    if (near < 0)
+        near = 0;
     nears[n] = near;
     fars[n] = far;
 }
 
 
-void near_far_from_aabb(const at::Tensor rays_o, const at::Tensor rays_d, const at::Tensor aabb, const uint32_t N, const float min_near, at::Tensor nears, at::Tensor fars) {
+void near_far_from_aabb(const at::Tensor rays_o, const at::Tensor rays_d, const at::Tensor aabb, const uint32_t N, at::optional<at::Tensor> min_near, at::Tensor nears, at::Tensor fars) {
 
     static constexpr uint32_t N_THREAD = 128;
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(
     rays_o.scalar_type(), "near_far_from_aabb", ([&] {
-        kernel_near_far_from_aabb<<<div_round_up(N, N_THREAD), N_THREAD>>>(rays_o.data_ptr<scalar_t>(), rays_d.data_ptr<scalar_t>(), aabb.data_ptr<scalar_t>(), N, min_near, nears.data_ptr<scalar_t>(), fars.data_ptr<scalar_t>());
+        kernel_near_far_from_aabb<<<div_round_up(N, N_THREAD), N_THREAD>>>(
+            rays_o.data_ptr<scalar_t>(), 
+            rays_d.data_ptr<scalar_t>(), 
+            aabb.data_ptr<scalar_t>(), 
+            N, min_near.has_value() ? min_near.value().data_ptr<scalar_t>() : nullptr,
+            nears.data_ptr<scalar_t>(), 
+            fars.data_ptr<scalar_t>());
     }));
 }
 
@@ -429,7 +426,7 @@ __global__ void kernel_march_rays_train(
     const uint8_t * __restrict__ grid,
     const scalar_t * __restrict__ bound, 
     const scalar_t * __restrict__ fb_ratio,//[3]
-    const bool contract,//通过bound确定块的尺度
+    const bool contract,
     const float dt_gamma, const uint32_t max_steps,
     const uint32_t N, const uint32_t C, const uint32_t H,
     const scalar_t* __restrict__ nears, 
@@ -487,21 +484,30 @@ __global__ void kernel_march_rays_train(
     t0 += clamp(t0 * dt_gamma, dt_min, dt_max) * noise;
     float t = t0;
     uint32_t step = 0;
-    bool intersected = false;//从相机到grid前景的这一段不用contract
-
+    bool intersected = (near > bound_max) | false;
+    // 从相机到grid前景的这一段不用contract
+    // 若相机在grid之外且射线么
     //if (t < far) printf("valid ray %d t=%f near=%f far=%f \n", n, t, near, far);
     
     while (t < far && step < num_steps) {
         // current point
-        const float x = clamp(ox + t * dx, -b3.x, b3.x);//bound default to 2
-        const float y = clamp(oy + t * dy, -b3.y, b3.y);
-        const float z = clamp(oz + t * dz, -b3.z, b3.z);
-        // const float x = ox + t * dx;
-        // const float y = oy + t * dy;
-        // const float z = oz + t * dz;
+        float x;
+        float y;
+        float z;
+        if (contract){
+            x = ox + t * dx;
+            y = oy + t * dy;
+            z = oz + t * dz;
+        }
+        else{
+            x = clamp(ox + t * dx, -b3.x, b3.x);
+            y = clamp(oy + t * dy, -b3.y, b3.y);
+            z = clamp(oz + t * dz, -b3.z, b3.z);
+        }
         float3 pt = make_float3(x,y,z);
 
         float dt = clamp(t * dt_gamma, dt_min, dt_max);
+        // float dt = 0.05;
         if(!intersected)
             intersected = in_aabb(pt,b3_fg);
         // get mip level
@@ -516,27 +522,12 @@ __global__ void kernel_march_rays_train(
         float mag_max = fmaxf(fmaxf(absx,absy),absz);
         // contraction
         // float cx = x, cy = y, cz = z;
-        
-        if(contract && intersected){
-            __contract_rect(pt,bound,fb_ratio);
+        // if(contract && intersected){
+        if(contract){
+            __contract_rect(pt,bound,fb_ratio);//注意作用域
         }
 
-        // if (contract && mag_max > bound_max*0.85) {
-        //     // L-INF norm
-
-        //     // const float Linf_x_scale = (bound3.x - bound3.x*0.8 / mag_max) / mag_max;
-        //     // const float Linf_y_scale = (bound3.y - bound3.y*0.8 / mag_max) / mag_max;
-        //     // const float Linf_z_scale = (bound3.z - bound3.z*0.8 / mag_max) / mag_max;
-
-        //     float Linf_x_scale = (b3.x - b3.x*0.85 / mag_max) / mag_max;
-        //     float Linf_y_scale = (b3.y - b3.y*0.85 / mag_max) / mag_max;
-        //     float Linf_z_scale = (b3.z - b3.z*0.85 / mag_max) / mag_max;
-
-        //     cx *= Linf_x_scale;
-        //     cy *= Linf_y_scale;
-        //     cz *= Linf_z_scale;
-        // }
-
+    
 
         float cx = pt.x, cy = pt.y, cz = pt.z;
         // convert to nearest grid position
@@ -550,14 +541,21 @@ __global__ void kernel_march_rays_train(
         // if occpuied, advance a small step, and write to output
         // if (n == 0) printf("t=%f density=%f vs thresh=%f step=%d\n", t, density, density_thresh, step);
 
-        // if (occ || (contract && (mag.x > bound[0]*fb_ratio[0] || mag.y > bound[1]*fb_ratio[1] || mag.z > bound[2]*fb_ratio[2]))) {
+        if (occ || (contract && (mag.x > bound[0]*fb_ratio[0] || mag.y > bound[1]*fb_ratio[1] || mag.z > bound[2]*fb_ratio[2]))) {
         // if (occ || mag_max > 0.1) {
         //意味着背景区域的点必然会被采样到
-        if (occ) {
+        // if (occ) {
             
             step++;
             t += dt;
             if (!first_pass) {
+                // if (cx>2.5)
+                //     printf("cx%f\n",cx);
+                // if (cy>2.5)
+                //     printf("cY%f\n",cy);
+                // if (cz>2.5)
+                //     printf("cz%f\n",cz);
+                    
                 xyzs[0] = cx; // write contracted coordinates!
                 xyzs[1] = cy;
                 xyzs[2] = cz;
@@ -574,18 +572,22 @@ __global__ void kernel_march_rays_train(
         // } else if (contract && mag > 1) {
         //     t += dt;
         // else, skip a large step (basically skip a voxel grid)
-        } else {
-            // calc distance to next voxel
-            const float tx = (((nx + 0.5f + 0.5f * signf(dx)) * rH * 2 - 1) * mip_bound - cx) * rdx;
-            const float ty = (((ny + 0.5f + 0.5f * signf(dy)) * rH * 2 - 1) * mip_bound - cy) * rdy;
-            const float tz = (((nz + 0.5f + 0.5f * signf(dz)) * rH * 2 - 1) * mip_bound - cz) * rdz;
+        } 
 
-            const float tt = t + fmaxf(0.0f, fminf(tx, fminf(ty, tz)));
-            // step until next voxel
-            do { 
-                dt = clamp(t * dt_gamma, dt_min, dt_max);
-                t += dt;
-            } while (t < tt);
+        else {
+            // calc distance to next voxel
+            dt = clamp(t * dt_gamma, dt_min, dt_max);
+            t += dt;
+        //     const float tx = (((nx + 0.5f + 0.5f * signf(dx)) * rH * 2 - 1) * mip_bound - cx) * rdx;
+        //     const float ty = (((ny + 0.5f + 0.5f * signf(dy)) * rH * 2 - 1) * mip_bound - cy) * rdy;
+        //     const float tz = (((nz + 0.5f + 0.5f * signf(dz)) * rH * 2 - 1) * mip_bound - cz) * rdz;
+
+        //     const float tt = t + fmaxf(0.0f, fminf(tx, fminf(ty, tz)));
+        //     // step until next voxel
+        //     do { 
+        //         dt = clamp(t * dt_gamma, dt_min, dt_max);
+        //         t += dt;
+        //     } while (t < tt);
         }
     }
 

@@ -110,13 +110,17 @@ class BaseDataset(IterableDataset):
     def __init__(self,config,split='train',downsample=1.0):
         self.config = config
         self.split = split
-        self.root_dir = config.root_dir
+        self.root_dir = self.config.root_dir
         self.downsample = downsample
-        self.ray_sampling_strategy = config.ray_sampling_strategy
-        self.batch_size = config.batch_size
+        self.ray_sampling_strategy = self.config.ray_sample.ray_sampling_strategy
+        self.batch_size = self.config.ray_sample.batch_size
         self.model_num = self.config.grid_X * self.config.grid_Y
         # self.transform_matrix = RDF_BRU
         self.current_model_num = self.config.model_start_num #记住更新！
+        if self.config.ray_sample.use_dynamic_sample:
+            self.train_num_rays = self.config.ray_sample.train_num_rays
+        else:
+            self.train_num_rays = self.config.ray_sample.batch_size
         # if split == 'train' or split == 'test':#已经分割完毕
             # self.load_mask()#初始化迭代列表
     def read_intrinsics(self):#不同数据集的W,H,K不一样
@@ -169,29 +173,24 @@ class BaseDataset(IterableDataset):
         return img if not with_fg_mask else (img,rays_valid)
     def __len__(self):#一个epoch是一个len
         if self.split.startswith('train'):
-            return self.config.batch_num#训练一个grid图片数的上限
+            return self.config.image_sample.batch_num#训练一个grid图片数的上限
+            # return 10000#训练一个grid图片数的上限
         elif self.split == 'merge_test':
             return self.poses.shape[0]
         return self.poses.shape[0]
         # return len(self.idxs)
     def __iter__(self):#iterable datasets本身就是一个迭代器，__iter__返回本身，这个
         self.load_mask()
-        if self.config.use_random:
-            self.idx_list = np.random.choice(self.idxs,self.config.batch_num)#绝对坐标
+        if self.config.image_sample.use_random:
+            self.idx_list = np.random.choice(self.idxs,self.config.image_sample.batch_num)#绝对坐标
         else:
             self.idx_list = []
-            for _ in range(0,int(np.ceil(self.config.batch_num/len(self.idxs)))):
+            for _ in range(0,int(np.ceil(self.self.config.image_sample.batch_num/len(self.idxs)))):
                 self.idx_list.extend(self.idxs)
         self.idx_tmp = 0
         
         
         if self.split == 'train':
-            """
-                一个epoch(model)已经训练结束,加载下一个grid对应的pose
-            """
-            # if self.current_model_num >= self.model_num:
-            #     return
-            # self.current_model_num += 1
             
             while True: # batch_num由__len__确定
                 # idxx=234
@@ -209,16 +208,22 @@ class BaseDataset(IterableDataset):
                 
                 pose_idx = item['pose_idx']
                 
-                img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False,with_fg_mask=True)# w*h 3
+                img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=self.config.image_sample.blend_a,with_fg_mask=True)# w*h 3
+                # img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:])
                 
-                
-                
-                true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
+                # x = torch.randint(0,self.img_wh[0],size=(self.train_num_rays,))
+                # y = torch.randint(0,self.img_wh[1],size=(self.train_num_rays,))
+                # dirs = self.directions.reshape(self.img_wh[0],self.img_wh[1],3)[y, x].reshape(-1,3)
+                # rays = img.reshape(self.img_wh[0],self.img_wh[1],3)[y,x].reshape(-1,3)
+                # fg_mask = fg_mask.reshape(self.img_wh[0],self.img_wh[1],3)[y,x].reshape(-1,3)
                 
                 # true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
+                
+                true_idx = torch.randperm(self.directions.shape[0])[:self.train_num_rays]
                 dirs=self.directions[true_idx]
                 rays = img[true_idx.to("cpu")]
                 fg_mask = fg_mask[true_idx.to("cpu")]
+                
                 # t_idx=torch.linalg.norm(rays,dim=-1)>1e-1
                 # rays=rays[t_idx,:]
                 # dirs=dirs[t_idx,:]
@@ -233,9 +238,7 @@ class BaseDataset(IterableDataset):
                 self.idx_tmp += 1
                 self.idx_tmp %= len(self.idx_list)
         elif self.split == 'merge_test':
-            yield{
-                'poses':self.poses_traj,
-            }
+            yield{}
         else:
             
             self.pose_idx = self.idx_list[self.idx_tmp]
@@ -250,7 +253,8 @@ class BaseDataset(IterableDataset):
                 # pose_idx=self.pose_idx
                 
                 # pose = self.poses[pose_idx]
-                img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=False,with_fg_mask=True)# w*h 3
+                img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=self.config.image_sample.blend_a,with_fg_mask=True)# w*h 3
+                # img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:])
                 yield {
                     "rays": img,
                     "pose_idx": pose_idx,

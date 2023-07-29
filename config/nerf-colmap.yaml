@@ -1,12 +1,13 @@
 
-# seed: 42
-seed: 31
+seed: 42
+# seed: 31
 # case_name: magicSqure
 # case_name: scan65
 # case_name: lego
 # case_name: lego_test
 # case_name: DJI951
 # case_name: ObliqueSBY1580
+# case_name: bottle_giraffe
 case_name: construction-site
 root_dir: /data3/zzy/data_lab/${case_name}
 # root_dir: /data3/zzy/public_data/${case_name}
@@ -19,7 +20,7 @@ mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 3 # 开始从第几个模型训练
+model_start_num: 2 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
@@ -27,59 +28,79 @@ val_mesh_freq: 10000
 val_ckpt_freq: 600
 # merge_modules: 5,6,9,10
 merge_modules: 0,1,2,3
-is_continue: false
-# is_continue: true
+# is_continue: false
+is_continue: true
 use_DDP: false
 dataset:
   name: colmap
-  downsample: 0.5 #训练集的图像降采样率
-  test_downsample: 0.1
-  scale_to: 2 #scale放缩至该绝对尺度
-  scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
-  fb_ratio: 0.9
-  use_random: true
   root_dir: ${root_dir}
-  ray_sampling_strategy: same_image
-  # batch_size: 128
-  # batch_size: 2048
-  # batch_size: 3248
-  # batch_size: 4096
-  batch_size: 8192
-  # batch_size: 16384
-  split_num: 1500
-  model_start_num: ${model_start_num}
   mask_dir: ${mask_dir}
+  downsample: 0.2 #训练集的图像降采样率
+  test_downsample: 0.1
   grid_X: ${grid_X}
   grid_Y: ${grid_Y}
-  batch_num: 400000
+  model_start_num: ${model_start_num}
   merge_modules: ${merge_modules}
+  aabb: 
+    scale_to: 4.2 #scale放缩至该绝对尺度
+    scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
+    # scale_zoom_up: 1.5 
+    fb_ratio: 0.9
+  point_sample:
+    use_random: True
+  ray_sample:
+    use_dynamic_sample: False
+    train_num_rays: 64
+    max_train_num_rays: 4096
+    ray_sampling_strategy: same_image
+    # batch_size: 1
+    # batch_size: 128
+    # batch_size: 2048
+    # batch_size: 3248
+    # batch_size: 4096
+    batch_size: 8192
+    # batch_size: 16384
+    split_num: 1500
+  image_sample:
+    blend_a: False
+    use_random: True
+    batch_num: 40000
+
 model:
   name: nerf
-  aabb:
-    use_custom_radius: false
-  grid_update_freq: 100
-  grid_resolution: 256 # 128
-  num_samples_per_ray: 512 # 512
-  grid_prune: True
-  use_raymarch: False
-  use_nerfacc: False
-  randomized: True
-  dt_gamma: 0.
-  fp16: True
-  T_thresh: 2e-4
-  density_thresh: 10.
-  scale_zoom_up: ${dataset.scale_zoom_up} #放大一个块的尺度以实现重叠
-  fb_ratio: ${dataset.fb_ratio} # 前景半径/背景半径
   rendering_from_alpha: True
-  n_importance: 64
-  up_sample_steps: 4
+  fp16: True
+  aabb:
+    scale_zoom_up: ${dataset.aabb.scale_zoom_up} #放大一个块的尺度以实现重叠
+    fb_ratio: ${dataset.aabb.fb_ratio} # 前景半径/背景半径
+  occ_grid:
+    grid_prune: True
+    grid_update_freq: 16
+    grid_resolution: 256 # 128
+    density_thresh: 0.00
+  point_sample:
+    use_raymarch: False
+    use_random: True
+    num_samples_per_ray: 512 # 512
+    use_contract: True
+    use_nerfacc: False
+    ray_march:
+      dt_gamma: 0.
+      T_thresh: 2e-4
+    inv_cdf:
+      n_importance: 64
+      up_sample_steps: 4
+  ray_sample:
+    use_dynamic_sample: ${dataset.ray_sample.use_dynamic_sample}
+    train_num_rays: ${dataset.ray_sample.train_num_rays}
+    max_train_num_rays: ${dataset.ray_sample.max_train_num_rays}
   geometry_network:
     feature_dim: 16
     sdf_activation: none
     sdf_bias: 0.
     grad_type: analytic
-    density_bias: -1
     include_xyzs: True
+    density_bias: -1
     isosurface:
       method: mc
       resolution: 512
@@ -111,12 +132,13 @@ model:
       # weight_norm: true
   color_network:
     name: volume-radiance
+    input_feature_dim: ${model.geometry_network.feature_dim}
     use_normal: False
     dir_encoding_config:
-      otype: SphericalHarmonics
-      degree: 4    
-      # otype: Frequency
-      # degree: 8
+      # otype: SphericalHarmonics
+      # degree: 4    
+      otype: Frequency
+      degree: 8
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
@@ -129,7 +151,7 @@ system:
   loss:
     use_normal: ${model.color_network.use_normal}
     lambda_rgb: 1.
-    lambda_opacity: 0.08
+    lambda_opacity: 0.1
     lambda_eikonal: 0.1
     lambda_mask: 0.
   optimizer:
@@ -147,15 +169,15 @@ system:
     name: ExponentialLR
     interval: step
     args:
-      step_size: 100
+      step_size: 200
       # gamma: 0.99
       # gamma: 1.01
       gamma: 0.995
 
 
 trainer:
-  max_steps: 2000000
-  log_every_n_steps: 100
+  max_steps: 40000
+  log_every_n_steps: 200
   num_sanity_val_steps: 0
   # val_check_interval: 500
   limit_train_batches: 1.0

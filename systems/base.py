@@ -10,6 +10,7 @@ import mcubes
 import trimesh
 from skimage.metrics import peak_signal_noise_ratio as psnr
 
+from utils.ray_utils import draw_aabb_mask
 from datasets.colmap import ColmapDataset
 from datasets.blender import BlenderDataset
 from model.loss import NeRFLoss
@@ -20,6 +21,7 @@ from model.neus import NeuS
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 
+from utils.ray_utils import get_rays
 from torch.utils.data import DataLoader
 
 from model.val_utils import extract_geometry
@@ -51,7 +53,7 @@ class ImageProcess():#存储图像
     DEFAULT_RGB_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1)}
     DEFAULT_UV_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1), 'cmap': 'checkerboard'}
     # DEFAULT_GRAYSCALE_KWARGS = {'data_range': None, 'cmap': 'jet'}
-    DEFAULT_GRAYSCALE_KWARGS = {'data_range': [0,3], 'cmap': 'jet'}
+    DEFAULT_GRAYSCALE_KWARGS = {'data_range': [0,7], 'cmap': 'jet'}
     def ConcatImg(self,img_val,img_true):#均为numpy格式
         Img = np.concatenate(img_val,img_true)
         return Img
@@ -197,12 +199,14 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
         self.current_model_num = self.config.model_start_num # 训练到的第几个模型
         self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
+        if self.config.model.ray_sample.use_dynamic_sample:
+            self.train_num_samples = self.config.model.ray_sample.train_num_rays * self.config.model.point_sample.num_samples_per_ray
         
     def setup(self,stage):
         self.discard_step = 0
 
         self.train_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='train',downsample=self.config.dataset.downsample)
-        self.train_dataset.batch_size = self.config.dataset.batch_size
+        self.train_dataset.batch_size = self.config.dataset.ray_sample.batch_size
         
         self.test_dataset = DATASETS[self.config.dataset.name](self.config.dataset,split='test',downsample=self.config.dataset.test_downsample)
         
@@ -224,8 +228,8 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
         self.train_dataset.device = self.device
         self.model.to(self.device)
-        self.register_buffer('directions', self.train_dataset.directions.to(self.device))
         self.register_buffer('poses', self.train_dataset.poses.to(self.device))
+        self.register_buffer('directions', self.train_dataset.directions.to(self.device))
         self.register_buffer('test_poses', self.test_dataset.poses.to(self.device))
         self.register_buffer('test_directions', self.test_dataset.directions.to(self.device))
         # opts=[]
@@ -257,7 +261,44 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
     def forward(self, batch):
         raise NotImplementedError
-    def preprocess_data(self, batch, stage):
+    def preprocess_data(self,batch,stage):
+        # if 'index' in batch: # validation / testing
+        #     index = batch['index']
+        # else:
+        #     if self.config.model.batch_image_sampling:
+        #         index = torch.randint(0, len(self.train_dataset.all_images), size=(self.train_num_rays,), device=self.train_dataset.all_images.device)
+        #     else:
+        #         index = torch.randint(0, len(self.train_dataset.all_images), size=(1,), device=self.train_dataset.all_images.device)
+        # if stage in ['train']:
+        #     c2w = self.poses[index]
+        #     x = torch.randint(
+        #         0, self.train_dataset.img_wh[0], size=(self.train_num_rays,), device=self.train_dataset.all_images.device
+        #     )
+        #     y = torch.randint(
+        #         0, self.train_dataset.img_wh[1], size=(self.train_num_rays,), device=self.train_dataset.all_images.device
+        #     )
+        #     directions = self.train_dataset.directions[y, x]
+        #     rays_o, rays_d = get_rays(directions, c2w)
+        #     rgb = self.train_dataset.all_images[index, y, x].view(-1, self.train_dataset.all_images.shape[-1])
+        #     fg_mask = self.train_dataset.all_fg_masks[index, y, x].view(-1)
+        # else:
+        #     # c2w = self.dataset.all_c2w[index][0]
+        #     c2w = self.test_poses[index]
+        #     directions = self.test_dataset.directions
+        #     rays_o, rays_d = get_rays(directions, c2w)
+        #     rgb = self.test_dataset.all_images[index].view(-1, self.test_dataset.all_images.shape[-1])
+        #     fg_mask = self.test_dataset.all_fg_masks[index].view(-1)
+        
+        # rays = torch.cat([rays_o, rays_d], dim=-1)
+        
+        # batch.update({
+        #     'rays': rays,
+        #     'rgb': rgb,
+        #     'fg_mask': fg_mask
+        # })
+        
+        
+        
         pass
     def training_step(self, batch, batch_idx):
         raise NotImplementedError
@@ -314,16 +355,14 @@ class BaseSystem(pl.LightningModule,ImageProcess):
     def validation_step(self, batch, batch_idx):#在traing_epoch_end之后
         """
             batch:{
-                pose : [3 4]
-                img_idxs : [1]
-                rgb : [w*h 3]
+                rays : [w*h 3]
+                pose_idxs : [1]
+                fg_mask : [w*h 1]
             }
         """
         
         # if self.global_step % self.config.save_ckpt_freq == 0:
         prefix = self.config.save_dir + f"/{self.current_model_num}/{self.config.model.name}"
-
-        
         
         out = self(batch,split='val')# rays:[W*H,3]
         # psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
@@ -331,9 +370,12 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         
         rgbs_true = batch["rays"].reshape(H,W,3)
         rgbs_val = out["rgb"].view(H, W, 3)
+        
+        psnr_ = psnr(rgbs_true.to("cpu").numpy(),rgbs_val.to("cpu").numpy())
+        w2c = torch.linalg.inv(torch.cat([self.test_poses[batch['pose_idx']].cpu(),torch.tensor([[0.,0.,0.,1.]])],dim=0))[:3,...]
+        rgbs_true = draw_aabb_mask(rgbs_true,w2c,self.test_dataset.K,self.model.scene_aabb[None,...])
         depth = out['depth'].view(H, W)
         # opacity = out['opacity'].view(H, W)
-        psnr_ = psnr(rgbs_true.to("cpu").numpy(),rgbs_val.to("cpu").numpy())
         img_name = os.path.join(prefix,"images",\
                                 f"model_{self.current_model_num}_"+
                                 f"it{self.global_step+self.discard_step}_"+

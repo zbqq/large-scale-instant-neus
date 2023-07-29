@@ -211,19 +211,19 @@ if __name__ == '__main__':
     import numpy as np
     import matplotlib.pyplot as plt
     N = 20
-    scale = [100,150,50]
-    b_bg = torch.tensor([20,30,10],dtype=torch.float32).cuda()
+    scale = [4,2,3]
+    b_bg = torch.tensor([4,2,3],dtype=torch.float32).cuda()
     fb_ratio = torch.ones([3],dtype=torch.float32).cuda()*0.1
     b_fg = b_bg * fb_ratio
     factor=torch.tensor([b_fg[0]/b_fg[1],b_fg[1]/b_fg[2],b_fg[0]/b_fg[2]]).cuda()
     # b_fg = b_bg * 0.7
-    x = np.arange(N)/N * scale[0] - scale[0]/2
-    y = np.arange(N)/N * scale[1] - scale[1]/2
-    z = np.arange(N)/N * scale[2] - scale[2]/2
+    # x = np.arange(N)/N * scale[0] - scale[0]/2
+    # y = np.arange(N)/N * scale[1] - scale[1]/2
+    # z = np.arange(N)/N * scale[2] - scale[2]/2
     
-    # x = np.arange(N)/N * scale[0]/2
-    # y = np.arange(N)/N * scale[1]/2
-    # z = np.arange(N)/N * scale[2]/2
+    x = np.arange(N)/N * scale[0]/2
+    y = np.arange(N)/N * scale[1]/2
+    z = np.arange(N)/N * scale[2]/2
     X,Y,Z=np.meshgrid(x,y,z)
     pts = torch.tensor(np.concatenate([X[...,None],Y[...,None],Z[...,None]],-1).reshape(-1,3),dtype=torch.float32).cuda()
     # pts = pts + torch.rand_like(pts).cuda()
@@ -263,11 +263,18 @@ if __name__ == '__main__':
     # pts_ = warp(pts,b_bg,b_fg)
     studio.contract_rect(pts,b_bg,fb_ratio,int(pts.shape[0]))
     pts = pts.cpu()
+    # from scripts.load_tool import draw_poses
+    # draw_poses(pts3d=pts)
+
+    
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     
     ax.scatter(pts[:,0],pts[:,1],pts[:,2])
-    plt.show()
+    # plt.show()
+    for i in range(0,20):
+        ax.view_init(elev=10*i-100, azim=i*4)
+        plt.savefig(f'./test{i}.png')
     pass
     # system = testSystem(config =1 ,split=0)
     # trainer = Trainer(max_epochs=10)

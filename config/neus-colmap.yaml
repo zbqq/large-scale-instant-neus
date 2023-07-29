@@ -61,6 +61,7 @@ model:
   grid_prune: True
   use_raymarch: True
   use_nerfacc: True
+  use_contract: True
   randomized: True
   dt_gamma: 0.
   fp16: True
@@ -110,6 +111,7 @@ model:
       weight_norm: true
   color_network:
     name: volume-radiance
+    input_feature_dim: ${model.geometry_network.feature_dim}
     use_normal: True
     dir_encoding_config:
       otype: SphericalHarmonics

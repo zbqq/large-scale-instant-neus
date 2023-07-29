@@ -13,7 +13,6 @@ class vanillaNeRF(baseModule):
     def __init__(self,config):#config.model
         super().__init__(config)
         self.config = config
-    
         self.geometry_network = vanillaMLP(self.config.geometry_network)
         self.color_network = RenderingNet(self.config.color_network)
         # self.loss = NeRFLoss(lambda_distortion=0)
@@ -23,7 +22,8 @@ class vanillaNeRF(baseModule):
             sigma = self.geometry_network(x, with_fea=False, with_grad=False)["sigma"]
             # sigma = torch.sigmoid(sigma)[...,None]
             return sigma.reshape(-1).detach() * self.render_step_size
-        if self.config.use_nerfacc:
+            # return sigma.reshape(-1).detach()
+        if self.config.point_sample.use_nerfacc:
             self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn)
         else:
             self.update_extra_state(occ_eval_fn = lambda pts: occ_eval_fn(x=pts))
@@ -38,7 +38,7 @@ class vanillaNeRF(baseModule):
         return alphas.view(-1,1)
     
     def forward(self,rays_o,rays_d,split):
-        if self.config.use_nerfacc:
+        if self.config.point_sample.use_nerfacc:
             sigma_grad_samples=[]
             
             # draw_poses(rays_o_=rays_o,rays_d_=rays_d,aabb_=self.scene_aabb[None,...])
@@ -68,6 +68,7 @@ class vanillaNeRF(baseModule):
                         t_min=t_min,t_max=t_max,
                         scene_aabb=self.scene_aabb,
                         grid = self.occupancy_grid,
+                        stratified=self.point_sample_random,
                         # alpha_fn = alpha_fn,
                         sigma_fn = sigma_fn,
                         near_plane=None, far_plane=None,
@@ -102,9 +103,9 @@ class vanillaNeRF(baseModule):
         else:  
             cam_near = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 0.
             # cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * torch.norm(self.scale)
-            cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 30
+            cam_far = torch.ones([rays_o.shape[0],1],device=rays_o.device) * 8
             cam_near_far = torch.cat([cam_near,cam_far],dim=-1)
-            result = self.render(rays_o,rays_d,cam_near_far=cam_near_far,split=split,perturb=True)
+            result = self.render(rays_o,rays_d,cam_near_far=cam_near_far,split=split,perturb=self.point_sample_random)
             return result
             
             
