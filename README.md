@@ -10,6 +10,9 @@ Here is a fusion version on a personal datasets
 <p align="center">
   <img src='./media/pic.gif'>
 </p><br>
+<p align="center">
+  <img src='./media/pic2.gif'>
+</p><br>
 
 
 
