@@ -156,6 +156,12 @@ class BaseDataset(IterableDataset):
     def read_img(self,img_path:str,img_wh,blend_a=True,with_fg_mask=False):
         img = imageio.imread(img_path).astype(np.float32)/255.0
         
+        if with_fg_mask:
+            rays_valid = torch.ones_like(torch.tensor(img[:,:,0]))
+            if img.shape[1] > 3:
+                rays_valid = torch.tensor(img[...,-1]>0,dtype=torch.bool)
+                
+            rays_valid = rays_valid.reshape(-1)
         if img.shape[2] == 4: # blend A to RGB
             if blend_a:
                 img = img[..., :3]*img[..., -1:]+(1-img[..., -1:])
@@ -164,12 +170,7 @@ class BaseDataset(IterableDataset):
         img = cv2.resize(img, img_wh)
         img = torch.tensor(rearrange(img, 'h w c -> (h w) c'))
         
-        rays_valid = torch.ones_like(img)
-        if with_fg_mask:
-            if img.shape[1] > 3:
-                rays_valid = torch.tensor(img[...,-1]>0,dtype=torch.bool)
-                
-            rays_valid = rays_valid.reshape(-1)
+        
         return img if not with_fg_mask else (img,rays_valid)
     def __len__(self):#一个epoch是一个len
         if self.split.startswith('train'):
@@ -211,18 +212,18 @@ class BaseDataset(IterableDataset):
                 img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=self.config.image_sample.blend_a,with_fg_mask=True)# w*h 3
                 # img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:])
                 
-                # x = torch.randint(0,self.img_wh[0],size=(self.train_num_rays,))
-                # y = torch.randint(0,self.img_wh[1],size=(self.train_num_rays,))
-                # dirs = self.directions.reshape(self.img_wh[0],self.img_wh[1],3)[y, x].reshape(-1,3)
-                # rays = img.reshape(self.img_wh[0],self.img_wh[1],3)[y,x].reshape(-1,3)
-                # fg_mask = fg_mask.reshape(self.img_wh[0],self.img_wh[1],3)[y,x].reshape(-1,3)
+                x = torch.randint(0,self.img_wh[1],size=(self.train_num_rays,))
+                y = torch.randint(0,self.img_wh[0],size=(self.train_num_rays,))
+                dirs = self.directions.reshape(self.img_wh[0],self.img_wh[1],3)[y, x].reshape(-1,3)
+                rays = img.reshape(self.img_wh[0],self.img_wh[1],3)[y,x].reshape(-1,3)
+                fg_mask = fg_mask.reshape(self.img_wh[0],self.img_wh[1],1)[y,x].reshape(-1,1)
                 
                 # true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
                 
-                true_idx = torch.randperm(self.directions.shape[0])[:self.train_num_rays]
-                dirs=self.directions[true_idx]
-                rays = img[true_idx.to("cpu")]
-                fg_mask = fg_mask[true_idx.to("cpu")]
+                # true_idx = torch.randperm(self.directions.shape[0])[:self.train_num_rays]
+                # dirs=self.directions[true_idx]
+                # rays = img[true_idx.to("cpu")]
+                # fg_mask = fg_mask[true_idx.to("cpu")]
                 
                 # t_idx=torch.linalg.norm(rays,dim=-1)>1e-1
                 # rays=rays[t_idx,:]
@@ -245,9 +246,10 @@ class BaseDataset(IterableDataset):
             # self.pose_idx = 292
             while True:
                 
-                # Idx = torch.load(self.mask_name[0])
+                # Idx = torch.load("/data3/zzy/data_lab/ObliqueSBY1580/mega_nerf_mask/4x4/model/6/metadata_736.pt")
                 
                 Idx = torch.load(self.mask_name[self.pose_idx])
+                
                 pose_idx = Idx['pose_idx']
                 
                 # pose_idx=self.pose_idx

@@ -75,6 +75,9 @@ class NeRFSystem(BaseSystem):
         if self.global_step%self.config.model.occ_grid.grid_update_freq == 0 and self.config.model.point_sample.use_raymarch :
             self.model.update_step(5,self.global_step)
         render_out = self(batch,split='train')
+        self.model.geometry_network.current_level = min(\
+            self.config.model.geometry_network.progressive_mask.start_level + 
+            self.global_step // self.config.model.geometry_network.progressive_mask.update_steps,self.config.model.geometry_network.xyz_encoding_config.n_levels)
         if self.config.dataset.ray_sample.use_dynamic_sample:
             train_num_rays = int(self.train_dataset.train_num_rays * (self.train_num_samples / render_out['num_samples'].sum().item()))        
             self.train_dataset.train_num_rays = min(int(self.train_dataset.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.ray_sample.max_train_num_rays)

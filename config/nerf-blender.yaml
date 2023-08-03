@@ -99,6 +99,8 @@ model:
     grad_type: analytic
     include_xyzs: True
     density_bias: -1
+    use_progressive_mask: True
+    progresive_mask_type: fwd_mask
     isosurface:
       method: mc
       resolution: 512

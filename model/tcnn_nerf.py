@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from omegaconf import OmegaConf
 from kornia.utils.grid import create_meshgrid3d
 from torch.cuda.amp import custom_fwd, custom_bwd
+from model.custom_functions import progressive_mask
 import torch
 from torch import nn
 import tinycudann as tcnn
@@ -120,7 +121,30 @@ class baseImplicitRep(nn.Module):#都采用grid或plane的方式
         self.register_buffer('xyz_min', -torch.ones(3)*self.scale + self.center)
         self.register_buffer('xyz_max', torch.ones(3)*self.scale + self.center)
         self.register_buffer('half_size', (self.xyz_max-self.xyz_min)/2)
- 
+class progressive_encoding(nn.Module):
+    def __init__(self,config):
+        super().__init__()
+        self.config = config
+        self.n_levels = self.config["xyz_encoding_config"]["n_levels"]
+        self.n_features_per_level = self.config["xyz_encoding_config"]["n_features_per_level"]
+        self.mask_type = self.config["progressive_mask"]["progresive_mask_type"]
+        self.register_buffer("mask",torch.zeros([self.n_levels*self.n_features_per_level], dtype=torch.float32))
+        if self.config["use_progressive_mask"]:
+            self.progressive_mask = progressive_mask
+        self.encoding = \
+            tcnn.Encoding(
+                n_input_dims=3,
+                encoding_config=self.config["xyz_encoding_config"])
+    
+    def forward(self,x,level):
+        feature = self.encoding(x)
+        self.mask[:level*self.n_features_per_level] = 1
+        if self.config["use_progressive_mask"]:
+            feature = self.progressive_mask(feature,self.mask.clone(),level,self.n_features_per_level,self.mask_type)
+            
+        return feature
+        
+    
     
 class Plane_v7(nn.Module):
     def __init__(self,config,
@@ -164,15 +188,17 @@ class SDF(baseImplicitRep):
         super().__init__(config=config)
         # self.config = OmegaConf.to_container(config)
 
-        self.xyz_encoder = \
-            tcnn.Encoding(
-                n_input_dims=3,
-                encoding_config=self.config["xyz_encoding_config"])
-        network_input_dim = self.xyz_encoder.n_output_dims + 3 * int(self.include_xyzs)
+        # self.xyz_encoder = \
+        #     tcnn.Encoding(
+        #         n_input_dims=3,
+        #         encoding_config=self.config["xyz_encoding_config"])
+        self.xyz_encoder = progressive_encoding(self.config)
+        network_input_dim = self.xyz_encoder.encoding.n_output_dims + 3 * int(self.include_xyzs)
         # if self.config.use_plane:
         #     self.plane_encoder, self.plane_dim = get_Plane_encoder(self.config.plane)
         #     network_input_dim += self.plane_dim
-        
+        self.current_level = 4
+        self.sphere_init_radius = float(self.config["sphere_init_radius"])
         self.sphere_init=self.config["mlp_network_config"]['sphere_init']
         self.weight_norm=self.config["mlp_network_config"]['weight_norm']
         self.inside_out=False # 室内 or 室外
@@ -192,30 +218,38 @@ class SDF(baseImplicitRep):
         )
         pass
     def make_linear(self, dim_in, dim_out, is_first, is_last):
-        layer = nn.Linear(dim_in, dim_out, bias=False)
+        layer = nn.Linear(dim_in, dim_out, bias=True)
+        # layer = nn.Linear(dim_in, dim_out, bias=False)
         if self.sphere_init:
             if is_last:
                 if self.inside_out:
+                    torch.nn.init.constant_(layer.bias, -self.sphere_init_radius)
                     torch.nn.init.normal_(layer.weight, mean=-math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
                 else:
+                    torch.nn.init.constant_(layer.bias, -self.sphere_init_radius)
                     torch.nn.init.normal_(layer.weight, mean=math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
             elif is_first:
+                torch.nn.init.constant_(layer.bias, 0.0)
                 torch.nn.init.constant_(layer.weight[:, 3:], 0.0)
                 torch.nn.init.normal_(layer.weight[:, :3], 0.0, math.sqrt(2) / math.sqrt(dim_out))
             else:
+                torch.nn.init.constant_(layer.bias, 0.0)
                 torch.nn.init.normal_(layer.weight, 0.0, math.sqrt(2) / math.sqrt(dim_out))
         else:
+            torch.nn.init.constant_(layer.bias, 0.0)
             torch.nn.init.kaiming_uniform_(layer.weight, nonlinearity='relu')
         
         if self.weight_norm:
             layer = nn.utils.weight_norm(layer)
         return layer  
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
+        
+        
         pts = (pts-self.xyz_min.T)/(self.xyz_max.T-self.xyz_min.T)
         with torch.enable_grad():
             if with_grad:
                 pts = pts.requires_grad_(True)
-            h = self.xyz_encoder(pts).float()
+            h = self.xyz_encoder(pts,self.current_level).float()
             # if self.config.use_plane:
             #     plane_fea = self.plane_encoder(pts)
             # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
@@ -289,15 +323,16 @@ class vanillaMLP(baseImplicitRep):
     def __init__(self, config):
         super().__init__(config=config)
         self.config = OmegaConf.to_container(config)
-        self.xyz_encoder = \
-            tcnn.Encoding(
-                n_input_dims=3,
-                encoding_config=self.config["xyz_encoding_config"])
-        network_input_dim=self.xyz_encoder.n_output_dims
+        self.xyz_encoder = progressive_encoding(self.config)
+        # self.xyz_encoder = \
+        #     tcnn.Encoding(
+        #         n_input_dims=3,
+        #         encoding_config=self.config["xyz_encoding_config"])
+        network_input_dim=self.xyz_encoder.encoding.n_output_dims
         # if self.config.use_plane:
         #     self.plane_encoder, self.plane_dim = get_Plane_encoder(self.config.plane)
         #     network_input_dim += self.plane_dim
-        
+        self.current_level = 4
         # self.activation = nn.Softplus(beta=100,threshold=20)
         bias=False
         n_neurons = self.config["mlp_network_config"]["n_neurons"]
@@ -312,12 +347,12 @@ class vanillaMLP(baseImplicitRep):
    
 			# self.activation
 		)
-        self.f=tcnn.NetworkWithInputEncoding(
-            n_input_dims=3,
-            n_output_dims=16,
-            encoding_config=self.config["xyz_encoding_config"],
-            network_config=self.config["mlp_network_config"]
-        )
+        # self.f=tcnn.NetworkWithInputEncoding(
+        #     n_input_dims=3,
+        #     n_output_dims=16,
+        #     encoding_config=self.config["xyz_encoding_config"],
+        #     network_config=self.config["mlp_network_config"]
+        # )
         
     def forward(self, pts:Tensor,with_fea=True,with_grad=False):
         
@@ -328,14 +363,14 @@ class vanillaMLP(baseImplicitRep):
             if with_grad:
                 pts = pts.requires_grad_(True)
                 
-            # h = self.xyz_encoder(pts).float()
+            h = self.xyz_encoder(pts,self.current_level).float()
             # # # if self.config.use_plane:
             # # #     plane_fea = self.plane_encoder(pts)
             # # # h = self.network(torch.cat([pts*(self.xyz_max.T-self.xyz_min.T)+self.xyz_min.T,h],dim=-1))
             # #     # h = torch.cat([h,plane_fea],dim=-1)
-            # h = self.network(h)
+            h = self.network(h)
             
-            h = self.f(pts).float()
+            # h = self.f(pts).float()
             sigma = h[:, 0]
             sigma = trunc_exp(sigma + float(self.config["density_bias"]))
             

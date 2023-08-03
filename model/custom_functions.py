@@ -494,27 +494,35 @@ def rendering_with_alpha(alphas,rgbs,ts,rays,n_rays):
         n_rays=n_rays,
     )
     return colors,opacities,depths
-
+MASK_TYPE={"fwd_mask":0,"bwd_mask":1}
 class _progressive_mask(torch.autograd.Function):
     """
+        分为前向mask与后向mask
     """
     @staticmethod
     @custom_fwd(cast_inputs=torch.float32)
-    def forward(ctx,feature,level,mask_type="fwd_mask",F=2):
-        assert feature.shape[1] == level.shape[1] * F
+    def forward(ctx,feature,mask,level,F=2,mask_type="fwd_mask"):
+        # assert feature.shape[1] == level.shape[1] * F
         # [N L*F], [L*F]
-        if mask_type == "fwd_mask":
-            feature[:,~level] = 0
-        ctx.save_for_backward(feature,level,mask_type)
+        
+        
+        if MASK_TYPE[mask_type] == 0:
+            feature = feature * mask.clone()
+        elif MASK_TYPE[mask_type] == 1:
+            pass
+        # ctx.save_for_backward(mask,MASK_TYPE[mask_type])
+        ctx.save_for_backward(mask)
         return feature
     @staticmethod
     @custom_bwd
     def backward(ctx,feature_grad):
-        feature,level,mask_type = ctx.saved_tensors
-        if mask_type == "fwd_mask":
-            pass
-        return feature_grad
-
+        mask = ctx.saved_tensors[0]
+        # if mask_type == MASK_TYPE["fwd_mask"]:
+        #     pass
+        # elif mask_type == MASK_TYPE["bwd_mask"]:
+        feature_grad = feature_grad * mask.clone()
+        return feature_grad,None,None,None,None
+progressive_mask = _progressive_mask.apply
 
 
 

@@ -3,24 +3,25 @@ seed: 42
 # seed: 31
 # case_name: magicSqure
 # case_name: scan65
+# case_name: sheep55-ngptest
 # case_name: lego
 # case_name: lego_test
 # case_name: DJI951
-# case_name: ObliqueSBY1580
+case_name: ObliqueSBY1580
 # case_name: bottle_giraffe
-case_name: construction-site
+# case_name: construction-site
 root_dir: /data3/zzy/data_lab/${case_name}
 # root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
-grid_X: 2
-grid_Y: 2
+grid_X: 4
+grid_Y: 4
 # mask_dir: ${root_dir}/ray_distance_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/camera_position_mask/${grid_X}x${grid_Y}
 mask_dir: ${root_dir}/mega_nerf_mask/${grid_X}x${grid_Y}
 # mask_dir: ${root_dir}/mask/${grid_X}x${grid_Y}
 save_dir: ${root_dir}/exp/${grid_X}x${grid_Y}
 ckpt_dir: ${save_dir}
-model_start_num: 2 # 开始从第几个模型训练
+model_start_num: 6 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
 # validate_freq: 1
@@ -28,21 +29,21 @@ val_mesh_freq: 10000
 val_ckpt_freq: 600
 # merge_modules: 5,6,9,10
 merge_modules: 0,1,2,3
-# is_continue: false
-is_continue: true
+is_continue: false
+# is_continue: true
 use_DDP: false
 dataset:
   name: colmap
   root_dir: ${root_dir}
   mask_dir: ${mask_dir}
-  downsample: 0.2 #训练集的图像降采样率
-  test_downsample: 0.1
+  downsample: 0.4 #训练集的图像降采样率
+  test_downsample: 0.2
   grid_X: ${grid_X}
   grid_Y: ${grid_Y}
   model_start_num: ${model_start_num}
   merge_modules: ${merge_modules}
   aabb: 
-    scale_to: 4.2 #scale放缩至该绝对尺度
+    scale_to: 2.1 #scale放缩至该绝对尺度
     scale_zoom_up: 1.2 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
     # scale_zoom_up: 1.5 
     fb_ratio: 0.9
@@ -101,6 +102,11 @@ model:
     grad_type: analytic
     include_xyzs: True
     density_bias: -1
+    use_progressive_mask: True
+    progressive_mask:
+      progresive_mask_type: bwd_mask
+      start_level: 4
+      update_steps: 1100
     isosurface:
       method: mc
       resolution: 512
@@ -120,8 +126,6 @@ model:
       # per_level_scale: 1.5874010519681996 #N_max = 16384
       # per_level_scale: 1.6624757922855755 #N_max = 32768
       # per_level_scale: 1.7411011265922482 #N_max = 65536
-
-      # include_xyz: true
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
@@ -142,7 +146,7 @@ model:
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
-      output_activation: Sigmoid
+      # output_activation: Sigmoid
       n_neurons: 64
       n_hidden_layers: 2
   
@@ -152,7 +156,7 @@ system:
     use_normal: ${model.color_network.use_normal}
     lambda_rgb: 1.
     lambda_opacity: 0.1
-    lambda_eikonal: 0.1
+    # lambda_eikonal: 0.1
     lambda_mask: 0.
   optimizer:
     # name: Adam

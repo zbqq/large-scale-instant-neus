@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # assert dataset.camera_model == "OPENCV"
     # camera_models = np.loadtxt(os.path.join(config.root_dir,"sparse/0","cameras.txt"))
     camera_models = read_cameras_binary(os.path.join(config.root_dir,"sparse/0","cameras.bin"))
-    K,distortion=params_from_models(camera_models[1].params)
+    
     input_path = os.path.join(config.root_dir,'images')
     prefix = "images_undistorted_{}".format(config.dataset.downsample)
     output_path = os.path.join(config.root_dir,prefix)
@@ -58,6 +58,7 @@ if __name__ == '__main__':
             continue
         distorted = cv2.imread(file)
         if require_undis:
+            K,distortion=params_from_models(camera_models[1].params)
             undistorted = cv2.undistort(distorted,
                             K.numpy(),
                             distortion

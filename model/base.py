@@ -52,8 +52,8 @@ class baseModule(nn.Module):
     def setup(self,center,scale):#这里的center，scale和divide中的背景aabb一致
         # self.center = center
         # self.scale = scale
-        center=torch.tensor([0.0, 0.0, 0.0]).to(center.device)
-        scale = torch.tensor([1.5, 1.5, 1.5]).to(center.device)
+        # center=torch.tensor([0.0, 0.0, 0.0]).to(center.device)
+        # scale = torch.tensor([1.5, 1.5, 1.5]).to(center.device)
         
         
         self.register_buffer('center',center)#这是已经scale to的尺度
@@ -107,13 +107,14 @@ class baseModule(nn.Module):
         depths = []
         pbar=tqdm.tqdm(total=len(rays_o))
         t1 = time.time()
-        for rays_o_batch, rays_d_batch in zip(rays_o, rays_d):
-            out = self(rays_o_batch,rays_d_batch,split='val')
-            final_out.append(out["rgb"])
-            depths.append(out["depth"])
-            pbar.update(1)
-        print("the time of rendering an image is ",time.time()-t1)
-        rgbs=torch.concat(final_out,dim=0)
+        with torch.no_grad():
+            for rays_o_batch, rays_d_batch in zip(rays_o, rays_d):
+                out = self(rays_o_batch,rays_d_batch,split='val')
+                final_out.append(out["rgb"])
+                depths.append(out["depth"])
+                pbar.update(1)
+            print("the time of rendering an image is ",time.time()-t1)
+            rgbs=torch.concat(final_out,dim=0)
         depths=torch.concat(depths,dim=0)
         
         return {
@@ -129,19 +130,19 @@ class baseModule(nn.Module):
         
         if self.config.point_sample.use_contract or not self.config.point_sample.use_raymarch:
             # if self.config.aabb.use_scaleup:# 在大场景分块算法中射线不能被截断
-            # aabb[0:2] -= self.scale[:2] * 10
-            # aabb[3:5] += self.scale[:2] * 10#扩大一点使得far不会终止到aabb上
+            aabb[0:2] -= self.scale[:2] * 10
+            aabb[3:5] += self.scale[:2] * 10#扩大一点使得far不会终止到aabb上
             
             # aabb[0:3] -= self.scale[:3] * 1
             # aabb[3:6] += self.scale[:3] * 1
             pass
-        # nears,fars = near_far_from_aabb( # 位移不改变nears，fars
-        #     rays_o,rays_d,aabb,torch.tensor([0.02],device = rays_o.device)#确定far时需要把射线打到地面上，而不是在边界
-        # )
+        nears,fars = near_far_from_aabb( # 位移不改变nears，fars
+            rays_o,rays_d,aabb,torch.tensor([0.02],device = rays_o.device)#确定far时需要把射线打到地面上，而不是在边界
+        )
         # nears,fars = near_far_from_aabb( # 位移不改变nears，fars
         #     rays_o,rays_d,aabb#确定far时需要把射线打到地面上，而不是在边界
         # )
-        nears,fars = ray_aabb_intersect(rays_o,rays_d,aabb)
+        # nears,fars = ray_aabb_intersect(rays_o,rays_d,aabb)
         
         # fars *= 1.1
         # valid_idx = fars<20

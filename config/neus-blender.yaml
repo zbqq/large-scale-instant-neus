@@ -23,7 +23,7 @@ ckpt_dir: ${save_dir}
 model_start_num: 0 # 开始从第几个模型训练
 validate_freq: 300
 val_mesh_freq: 10000
-# validate_freq: 1
+# validate_freq: 10
 # val_mesh_freq: 1
 val_ckpt_freq: 600
 merge_modules: 5,6,9,10
@@ -48,7 +48,7 @@ dataset:
     scale_zoom_up: 1.0 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
     fb_ratio: 0.9
   ray_sample:
-    use_dynamic_sample: False
+    use_dynamic_sample: True
     train_num_rays: 128
     max_train_num_rays: 8192
     ray_sampling_strategy: same_image
@@ -81,28 +81,33 @@ model:
     use_random: True
     num_samples_per_ray: 512 # 512
     use_contract: False
-    use_nerfacc: False
+    use_nerfacc: True
     ray_march:
       dt_gamma: 0.
       T_thresh: 2e-4
-  inv_cdf:
-      init_variance: 0.3
-      cos_anneal_end: 5000
-      n_importance: 32
-      up_sample_steps: 3
+    inv_cdf:
+        init_variance: 0.3
+        cos_anneal_end: 5000
+        n_importance: 32
+        up_sample_steps: 3
   ray_sample:
     use_dynamic_sample: ${dataset.ray_sample.use_dynamic_sample}
     train_num_rays: ${dataset.ray_sample.train_num_rays}
     max_train_num_rays: ${dataset.ray_sample.max_train_num_rays}
   geometry_network:
+    sphere_init_radius: 0.
     feature_dim: 13
     sdf_activation: none
-    sdf_bias: 0.
     grad_type: analytic
     include_xyzs: True
+    use_progressive_mask: False
+    progressive_mask:
+      progresive_mask_type: bwd_mask
+      start_level: 4
+      update_steps: 1100
     isosurface:
       method: mc
-      resolution: 1024
+      resolution: 512
       chunk: 2097152
       threshold: 0.
     xyz_encoding_config:

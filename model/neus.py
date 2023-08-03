@@ -17,7 +17,7 @@ class NeuS(baseModule):
         # self.render_step_size = 1.732 * 2 * self.config.aabb.radius_z / self.config.num_samples_per_ray
         
         self.geometry_network = SDF(self.config.geometry_network)
-        self.variance = VarianceNetwork(self.config.inv_cdf.init_variance)
+        self.variance = VarianceNetwork(self.config.point_sample.inv_cdf.init_variance)
         self.color_network = RenderingNet(self.config.color_network)
         
         # self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
@@ -25,7 +25,7 @@ class NeuS(baseModule):
         self.cos_anneal_ratio = 1.0
         # self.loss = NeRFLoss(lambda_distortion=0)
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
-        cos_anneal_end = self.config.inv_cdf.get('cos_anneal_end', 0)
+        cos_anneal_end = self.config.point_sample.inv_cdf.get('cos_anneal_end', 0)
         self.cos_anneal_ratio = 1.0 if cos_anneal_end == 0 else min(1.0, global_step / cos_anneal_end)
         if self.config.point_sample.use_nerfacc:
             def occ_eval_fn(x):

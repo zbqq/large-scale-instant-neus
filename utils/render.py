@@ -246,36 +246,41 @@ def render_from_raymarch(\
                 rgbs = color_network(dirs,feas)
         geo_output['dirs'] = dirs
         if config.rendering_from_alpha:
-            if config.color_network.use_normal:
-                alphas = get_alphas(geo_output,ts[:,1:2])
-            else:
-                alphas = get_alphas(geo_output,ts[:,1:2])
+            alphas = get_alphas(geo_output,ts[:,1:2])
+            # if config.color_network.use_normal:
+            #     alphas = get_alphas(geo_output,ts[:,1:2])
+            # else:
+            #     alphas = get_alphas(geo_output,ts[:,1:2])
             image,opacities,depth = rendering_with_alpha(alphas,rgbs,ts,rays,rays_o.shape[0])
-            # image=image+bkgd_color*(1.-opacities)
-            opacities = torch.clamp(opacities,1e-3,1.-1e-3).view(-1)
+            
+            # image=image+bkgd_color*(1.-torch.clamp(opacities,0.,1.).view(-1,1)) # 提取前景
+            image=image+bkgd_color*(1.-opacities) # 提取前景
             results = {
                 # 'weights':weights,
                 # 'rays_valid':weights_sum>0,
                 # 'opacity':torch.clamp(opacities,1e-12,1000),
-                'opacity':opacities,
+                'opacity':torch.clamp(opacities,1e-3,1.-1e-3).view(-1),
                 'rays_valid':opacities > 0,
                 'num_samples':torch.tensor(xyzs.shape[0]),
                 
             }
+            
             if config.color_network.use_normal:
                 results['normals']=normals
                 results['grad']=grad
         else:
             weights, weights_sum, depth, image = \
                 composite_rays_train(sigmas, rgbs, ts, rays, config.point_sample.ray_march.T_thresh)
-        
+            
+            opacities = weights_sum
+            image=image+bkgd_color*(1.-opacities)
             results = {
                 'weights':weights,
                 # 'rays_valid':weights_sum>0,
-                'opacity':torch.clamp(weights_sum,1e-3,1.-1e-3),
+                'opacity':torch.clamp(opacities,1e-5,1.-1e-5).view(-1),
+                'rays_valid':opacities > 0,
                 'num_samples':torch.tensor(xyzs.shape[0]),
             }
-        # opacity = torch.clamp(weights_sum,1e-12,1000)
         
         
     elif split=='hhh':

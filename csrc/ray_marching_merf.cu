@@ -489,7 +489,8 @@ __global__ void kernel_march_rays_train(
     // 若相机在grid之外且射线么
     //if (t < far) printf("valid ray %d t=%f near=%f far=%f \n", n, t, near, far);
     
-    while (t < far && step < num_steps) {
+    // while (t < far && step < num_steps) {
+    while (t < far) {
         // current point
         float x;
         float y;
