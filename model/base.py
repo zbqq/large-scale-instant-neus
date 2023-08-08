@@ -47,13 +47,13 @@ class baseModule(nn.Module):
         # b = np.exp(np.log(2048*self.scale/N_min)/(L-1))
         # self.render_step_size = 1.732 * 2 * self.config.radius_z / self.config.num_samples_per_ray
         
-        self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
-    
+        
+        # self.register_buffer('background_color', torch.rand((3,)), persistent=False)
     def setup(self,center,scale):#这里的center，scale和divide中的背景aabb一致
         # self.center = center
         # self.scale = scale
-        # center=torch.tensor([0.0, 0.0, 0.0]).to(center.device)
-        # scale = torch.tensor([1.5, 1.5, 1.5]).to(center.device)
+        center=torch.tensor([0.0, 0.0, 0.0]).to(center.device)
+        scale = torch.tensor([1.,1.,1.]).to(center.device)*0.6
         
         
         self.register_buffer('center',center)#这是已经scale to的尺度
@@ -62,6 +62,8 @@ class baseModule(nn.Module):
         
 
         self.geometry_network.setup(self.center,self.scale)
+        self.geometry_network_bg.setup(self.center,self.scale)
+        
         # self.render_step_size = 1.732 * 2.5 * max(scale)/ self.config.num_samples_per_ray
         self.render_step_size = 1.732 * 2 * scale[2]/ self.config.point_sample.num_samples_per_ray
         # 无人机视角下不包含
@@ -84,10 +86,16 @@ class baseModule(nn.Module):
         
             if self.config.point_sample.use_nerfacc:
                 self.occupancy_grid = OccupancyGrid(
-                    roi_aabb=self.scene_aabb,
-                    resolution=self.H,
-                    contraction_type=ContractionType.AABB
+                    roi_aabb = self.scene_aabb,
+                    resolution = self.H,
+                    contraction_type = ContractionType.AABB
                 )
+                if self.config.learned_background:
+                    self.occupancy_grid_bg = OccupancyGrid(
+                        roi_aabb = self.scene_aabb,
+                        resolution = 256,
+                        contraction_type = ContractionType.UN_BOUNDED_SPHERE
+                    )
             else:
                 self.register_buffer('density_bitfield',
                     torch.zeros(self.C*self.H**3//8, dtype=torch.uint8))
@@ -97,6 +105,8 @@ class baseModule(nn.Module):
                     torch.zeros(self.C, self.H**3))
                 self.iter_density=0
             pass
+        # self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
+        self.register_buffer('background_color', torch.as_tensor(torch.rand(3,), dtype=torch.float32), persistent=False)
     def update_step(self,epoch,global_step):#更新cos_anneal_ratio
         raise NotImplementedError
     

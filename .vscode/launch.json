@@ -26,6 +26,9 @@
             // "program": "./model/tcnn_nerf.py",//
             
             // "program": "./test/test1.py",//
+            // "program": "./test/test2.py",//
+            // "program": "./test2.py",//
+            // "program": "./test/test3.py",//
             // "program": "./test/DDP_test.py",//
             // "program": "./datasets/divide_utils.py",//
             
@@ -37,8 +40,8 @@
                 // "--conf_path","./config/nerf-blender.yaml",
                 // "--conf_path","./config/nerf-colmap.yaml",
 
-                "--conf_path","./config/neus-blender.yaml",
-                // "--conf_path","./config/neus-colmap.yaml",
+                // "--conf_path","./config/neus-blender.yaml",
+                "--conf_path","./config/neus-colmap.yaml",
                 // "--conf","/home/will/test/L-NeRF/conf/conf.json",
                 "--gpu","0",
                 "--num_epochs","1",
@@ -79,7 +82,7 @@
             ],
             
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": true
         },
         {
             "name": "multi-gpu",

@@ -212,11 +212,11 @@ class BaseDataset(IterableDataset):
                 img,fg_mask = self.read_img(self.img_paths[pose_idx],self.img_wh,blend_a=self.config.image_sample.blend_a,with_fg_mask=True)# w*h 3
                 # img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:])
                 
-                x = torch.randint(0,self.img_wh[1],size=(self.train_num_rays,))
-                y = torch.randint(0,self.img_wh[0],size=(self.train_num_rays,))
-                dirs = self.directions.reshape(self.img_wh[0],self.img_wh[1],3)[y, x].reshape(-1,3)
-                rays = img.reshape(self.img_wh[0],self.img_wh[1],3)[y,x].reshape(-1,3)
-                fg_mask = fg_mask.reshape(self.img_wh[0],self.img_wh[1],1)[y,x].reshape(-1,1)
+                x = torch.randint(0,self.img_wh[0],size=(self.train_num_rays,))
+                y = torch.randint(0,self.img_wh[1],size=(self.train_num_rays,))
+                dirs = self.directions.reshape(self.img_wh[1],self.img_wh[0],3)[y, x].reshape(-1,3)
+                rays = img.reshape(self.img_wh[1],self.img_wh[0],3)[y,x].reshape(-1,3)
+                fg_mask = fg_mask.reshape(self.img_wh[1],self.img_wh[0],1)[y,x].reshape(-1,1)
                 
                 # true_idx = torch.randperm(self.directions.shape[0])[:self.config.batch_size]
                 

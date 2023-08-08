@@ -9,7 +9,7 @@ import os
 import mcubes
 import trimesh
 from skimage.metrics import peak_signal_noise_ratio as psnr
-
+from utils.utils import parse_scheduler
 from utils.ray_utils import draw_aabb_mask
 from datasets.colmap import ColmapDataset
 from datasets.blender import BlenderDataset
@@ -53,7 +53,7 @@ class ImageProcess():#存储图像
     DEFAULT_RGB_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1)}
     DEFAULT_UV_KWARGS = {'data_format': 'CHW', 'data_range': (0, 1), 'cmap': 'checkerboard'}
     # DEFAULT_GRAYSCALE_KWARGS = {'data_range': None, 'cmap': 'jet'}
-    DEFAULT_GRAYSCALE_KWARGS = {'data_range': [0,5], 'cmap': 'jet'}
+    DEFAULT_GRAYSCALE_KWARGS = {'data_range': [0,1.6], 'cmap': 'jet'}
     def ConcatImg(self,img_val,img_true):#均为numpy格式
         Img = np.concatenate(img_val,img_true)
         return Img
@@ -200,7 +200,8 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         self.current_model_num = self.config.model_start_num # 训练到的第几个模型
         self.current_model_num_tmp = self.config.model_start_num # 训练到的第几个模型
         if self.config.model.ray_sample.use_dynamic_sample:
-            self.train_num_samples = self.config.model.ray_sample.train_num_rays * self.config.model.point_sample.num_samples_per_ray
+            self.train_num_samples = self.config.model.ray_sample.train_num_rays * \
+                (self.config.model.point_sample.num_samples_per_ray+self.config.model.point_sample.num_samples_per_ray_bg)
         
     def setup(self,stage):
         self.discard_step = 0
@@ -243,6 +244,16 @@ class BaseSystem(pl.LightningModule,ImageProcess):
         # lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.net_opt,gamma=self.config.system.scheduler.args.gamma)
         
         # return [self.net_opt],[lr_scheduler]
+        # optim = parse_optimizer(self.config.system.optimizer, self.model)
+        # ret = {
+        #     'optimizer': optim,
+        # }
+        # if 'scheduler' in self.config.system:
+        #     ret.update({
+        #         'lr_scheduler': parse_scheduler(self.config.system.scheduler, optim),
+        #     })
+        # return ret
+    
         lr_scheduler = torch.optim.lr_scheduler.StepLR(\
             self.net_opt,
             step_size=self.config.system.scheduler.args.step_size,

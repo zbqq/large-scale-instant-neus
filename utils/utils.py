@@ -5,9 +5,9 @@ import os
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
-
+from nerfacc import ContractionType
 from pytorch_lightning.utilities.rank_zero import rank_zero_debug
-
+import studio
 
 class ChainedScheduler(lr_scheduler._LRScheduler):
     """Chains list of learning rate schedulers. It takes a list of chainable learning
@@ -356,9 +356,31 @@ def load_ckpt_path(ckpt_dir):
     return step,os.path.join(ckpt_dir,ckpt_path)
 
 # def set_device():
-    
+def contract_points(pts, xyz_min,xyz_max, contract_type):
+    """
+    对于前景,AABB contract,输出为[0,1]
+    对于背景,merf contract,输出为[0,0.25] & [0.75,1]
+    Args:
+        pts (_type_): _description_
+        aabb (_type_): _description_
+        contract_type (_type_): _description_
 
-    
+    Returns:
+        _type_: _description_
+    """
+    if contract_type == ContractionType.AABB:
+        pts = (pts - xyz_min)/(xyz_max - xyz_min)
+    elif contract_type == ContractionType.UN_BOUNDED_SPHERE:
+        
+        pts = (pts - xyz_min)/(xyz_max - xyz_min) # [0,1] , [-inf,0]&[1,inf]
+        pts = pts * 2 - 1 # [-1,1] , [-inf,-1]&[1,inf]
+        mag = torch.norm(pts,p=1,dim=-1,keepdim=True) # merf contract
+        mask = mag.squeeze(-1) > 1
+        # mag = pts.norm(dim=-1,keepdim=True)
+        pts[mask] = (2 - 1 / mag[mask]) * (pts[mask] / mag[mask]) # [-1,1] , [-2,-1]&[1,2]
+        pts = pts / 4 + 0.5 # [0.25,0.75] , [0,0.25]&[0.75,1]
+    return pts
+
 def sphere_init_tcnn_network(n_input_dims, n_output_dims, config, network):
     rank_zero_debug('Initialize tcnn MLP to approximately represent a sphere.')
     """

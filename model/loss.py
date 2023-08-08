@@ -52,7 +52,7 @@ class NeRFLoss(nn.Module):
 
     def forward(self, results, target, **kwargs):
         d = {}
-        # rays_valid = results['rays_valid'].view(-1)
+        rays_valid = results['rays_valid'].view(-1)
         # rays_valid = target['fg_mask'].view(-1).to(torch.bool)
         
         # d['rgb'] = F.mse_loss(results['rgb'],target['rays'].to(self.device),reduction='mean') * self.config.lambda_rgb
@@ -62,13 +62,16 @@ class NeRFLoss(nn.Module):
         # else:
         #     d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays']) * self.config.lambda_rgb
         
-        d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays']) * self.config.lambda_rgb
+        # d['rgb'] = F.smooth_l1_loss(results['rgb'],target['rays']) * self.config.lambda_rgb
         # d['rgb'] = F.smooth_l1_loss(results['rgb'][rays_valid],target['rays'][rays_valid]) * self.config.lambda_rgb#训练的epoch小的话很不好
-        opacity = results['opacity']
+        d['rgb'] = F.mse_loss(results['rgb'][rays_valid],target['rays'][rays_valid]) * 10#训练的epoch小的话很不好
+        
+        # opacity = results['opacity']
         # o = results['opacity'][results['rays_valid']]+1e-10
         # encourage opacity to be either 0 or 1 to avoid floater
-        d['opacity'] = self.lambda_opacity*(-opacity*torch.log(opacity))*self.config.lambda_opacity
-        # d['opacity'] = binary_cross_entropy(opacity, target['fg_mask'].float())*self.config.lambda_opacity
+        # d['opacity'] = self.lambda_opacity*(-opacity*torch.log(opacity))*self.config.lambda_opacity # opacity_1
+        # d['opacity'] = binary_cross_entropy(opacity, target['fg_mask'].float())*self.config.lambda_opacity # opacity_2
+        # d['sdf'] = torch.exp(-1. * results['sdf'].abs()).mean()
         if self.config.use_normal:
             d['eikonal']=((torch.linalg.norm(results['grad'], ord=2, dim=-1) - 1.)**2).mean()*self.config.lambda_eikonal
         if self.lambda_distortion > 0:

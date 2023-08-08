@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import os
 from .ray_utils import *
+from utils.ray_utils import normalize_poses
 from .colmap_utils import \
     read_cameras_binary, read_images_binary, read_points3d_binary
 from datasets.datasets import BaseDataset
@@ -64,6 +65,7 @@ class ColmapDataset(BaseDataset,divideTool):
         self.img_paths = [os.path.join(self.root_dir, folder, name)
                          for name in sorted(img_names)]
         
+        pts = torch.tensor(np.loadtxt(self.new_pts3d_path,usecols=(0,1,2)),dtype=torch.float32)
         
         w2c_mats = []
         bottom = torch.tensor([[0, 0, 0, 1.]])
@@ -81,7 +83,7 @@ class ColmapDataset(BaseDataset,divideTool):
         self.grid_dim = torch.tensor([self.config.grid_X,
                              self.config.grid_Y,
                              1])
-        
+        self.poses, pts3d1 = normalize_poses(self.poses, pts, up_est_method="ground", center_est_method="lookat")
         # if self.split == 'divide': # 首先需要用cloudCopmare根据预处理后的稀疏点云分割，得到scale
         #     # grid_dim = torch.tensor([])
         #     pass
@@ -95,7 +97,7 @@ class ColmapDataset(BaseDataset,divideTool):
         if self.split == 'train':
             self.load_centers()#从txt得到centers和scale
             self.load_mask()#从mask dir获得mask名字
-            self.scale_to(scale=self.config.aabb.scale_to,current_model_idx=self.current_model_num)#放缩到指定尺度
+            # self.scale_to(scale=self.config.aabb.scale_to,current_model_idx=self.current_model_num)#放缩到指定尺度
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.img_paths = [self.img_paths[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
             # self.poses = [self.poses[self.idxs[i]] for i in range(0,len(self.idxs)) if i%8!=0]
@@ -105,7 +107,7 @@ class ColmapDataset(BaseDataset,divideTool):
         if self.split == 'test':
             self.load_centers()
             self.load_mask()
-            self.scale_to(scale=self.config.aabb.scale_to,current_model_idx=self.current_model_num)
+            # self.scale_to(scale=self.config.aabb.scale_to,current_model_idx=self.current_model_num)
             # del self.poses
 
             # self.idxs = [self.idxs[i] for i in range(0,len(self.idxs)) if i%8==0]

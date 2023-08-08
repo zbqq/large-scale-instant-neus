@@ -520,7 +520,7 @@ class _progressive_mask(torch.autograd.Function):
         # if mask_type == MASK_TYPE["fwd_mask"]:
         #     pass
         # elif mask_type == MASK_TYPE["bwd_mask"]:
-        feature_grad = feature_grad * mask.clone()
+        # feature_grad = feature_grad * mask.clone()
         return feature_grad,None,None,None,None
 progressive_mask = _progressive_mask.apply
 

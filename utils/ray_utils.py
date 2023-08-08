@@ -3,6 +3,7 @@ import numpy as np
 from kornia import create_meshgrid
 from einops import rearrange
 import cv2
+import torch.nn.functional as F
 
 @torch.cuda.amp.autocast(dtype=torch.float32)
 def get_ray_directions(H, W, K, device='cpu', random=False, return_uv=False, flatten=True):
@@ -176,6 +177,97 @@ def center_poses(poses, pts3d=None):
 
     return poses_centered
 
+def get_center(pts):
+    center = pts.mean(0)
+    dis = (pts - center[None,:]).norm(p=2, dim=-1)
+    mean, std = dis.mean(), dis.std()
+    q25, q75 = torch.quantile(dis, 0.25), torch.quantile(dis, 0.75)
+    valid = (dis > mean - 1.5 * std) & (dis < mean + 1.5 * std) & (dis > mean - (q75 - q25) * 1.5) & (dis < mean + (q75 - q25) * 1.5)
+    center = pts[valid].mean(0)
+    return center
+
+def normalize_poses(poses, pts, up_est_method, center_est_method):
+    if center_est_method == 'camera':
+        # estimation scene center as the average of all camera positions
+        center = poses[...,3].mean(0)
+    elif center_est_method == 'lookat':
+        # estimation scene center as the average of the intersection of selected pairs of camera rays
+        cams_ori = poses[...,3]
+        cams_dir = poses[:,:3,:3] @ torch.as_tensor([0.,0.,-1.])
+        cams_dir = F.normalize(cams_dir, dim=-1)
+        A = torch.stack([cams_dir, -cams_dir.roll(1,0)], dim=-1)
+        b = -cams_ori + cams_ori.roll(1,0)
+        t = torch.linalg.lstsq(A, b).solution
+        center = (torch.stack([cams_dir, cams_dir.roll(1,0)], dim=-1) * t[:,None,:] + torch.stack([cams_ori, cams_ori.roll(1,0)], dim=-1)).mean((0,2))
+    elif center_est_method == 'point':
+        # first estimation scene center as the average of all camera positions
+        # later we'll use the center of all points bounded by the cameras as the final scene center
+        center = poses[...,3].mean(0)
+    else:
+        raise NotImplementedError(f'Unknown center estimation method: {center_est_method}')
+
+    if up_est_method == 'ground':
+        # estimate up direction as the normal of the estimated ground plane
+        # use RANSAC to estimate the ground plane in the point cloud
+        import pyransac3d as pyrsc
+        ground = pyrsc.Plane()
+        plane_eq, inliers = ground.fit(pts.numpy(), thresh=0.01) # TODO: determine thresh based on scene scale
+        plane_eq = torch.as_tensor(plane_eq) # A, B, C, D in Ax + By + Cz + D = 0
+        z = F.normalize(plane_eq[:3], dim=-1) # plane normal as up direction
+        signed_distance = (torch.cat([pts, torch.ones_like(pts[...,0:1])], dim=-1) * plane_eq).sum(-1)
+        if signed_distance.mean() < 0:
+            z = -z # flip the direction if points lie under the plane
+    elif up_est_method == 'camera':
+        # estimate up direction as the average of all camera up directions
+        z = F.normalize((poses[...,3] - center).mean(0), dim=0)
+    else:
+        raise NotImplementedError(f'Unknown up estimation method: {up_est_method}')
+
+    # new axis
+    y_ = torch.as_tensor([z[1], -z[0], 0.])
+    x = F.normalize(y_.cross(z), dim=0)
+    y = z.cross(x)
+
+    if center_est_method == 'point':
+        # rotation
+        Rc = torch.stack([x, y, z], dim=1)
+        R = Rc.T
+        poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
+        inv_trans = torch.cat([torch.cat([R, torch.as_tensor([[0.,0.,0.]]).T], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
+        poses_norm = (inv_trans @ poses_homo)[:,:3]
+        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+
+        # translation and scaling
+        poses_min, poses_max = poses_norm[...,3].min(0)[0], poses_norm[...,3].max(0)[0]
+        pts_fg = pts[(poses_min[0] < pts[:,0]) & (pts[:,0] < poses_max[0]) & (poses_min[1] < pts[:,1]) & (pts[:,1] < poses_max[1])]
+        center = get_center(pts_fg)
+        tc = center.reshape(3, 1)
+        t = -tc
+        poses_homo = torch.cat([poses_norm, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses_norm.shape[0], -1, -1)], dim=1)
+        inv_trans = torch.cat([torch.cat([torch.eye(3), t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
+        poses_norm = (inv_trans @ poses_homo)[:,:3]
+        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+        poses_norm[...,3] /= scale
+        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+        pts = pts / scale
+    else:
+        # rotation and translation
+        Rc = torch.stack([x, y, z], dim=1)
+        tc = center.reshape(3, 1)
+        R, t = Rc.T, -Rc.T @ tc
+        poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
+        inv_trans = torch.cat([torch.cat([R, t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
+        poses_norm = (inv_trans @ poses_homo)[:,:3] # (N_images, 4, 4)
+
+        # scaling
+        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+        poses_norm[...,3] /= scale
+
+        # apply the transformation to the point cloud
+        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+        pts = pts / scale
+
+    return poses_norm, pts
 def create_spheric_poses(radius, mean_h, n_poses=120):
     """
     Create circular poses around z axis.

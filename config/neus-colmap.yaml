@@ -3,7 +3,7 @@ seed: 42
 # seed: 31
 # case_name: magicSqure
 # case_name: scan65
-# case_name: sheep55-ngptest
+case_name: sheep55-ngptest
 # case_name: lego
 # case_name: lego_test
 # case_name: DJI951
@@ -11,7 +11,7 @@ seed: 42
 # case_name: bottle_giraffe
 # case_name: construction-site
 # root_dir: /data3/zzy/data_lab/${case_name}
-# root_dir: /data3/zzy/public_data/${case_name}
+root_dir: /data3/zzy/public_data/${case_name}
 log_dir: ${root_dir}/logs
 grid_X: 1
 grid_Y: 1
@@ -46,12 +46,12 @@ dataset:
   model_start_num: ${model_start_num}
   merge_modules: ${merge_modules}
   aabb:
-    scale_to: 2.1 #scale放缩至该绝对尺度
-    scale_zoom_up: 2.0 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
+    scale_to: 1. #scale放缩至该绝对尺度
+    scale_zoom_up: 1.0 # 放大每个块让前景重叠，也即fb_ratio * sacle_zoom_up > 1
     fb_ratio: 0.9
   ray_sample:
-    use_dynamic_sample: False
-    train_num_rays: 1024
+    use_dynamic_sample: True
+    train_num_rays: 256
     max_train_num_rays: 4096
     ray_sampling_strategy: same_image
     # batch_size: 128
@@ -64,11 +64,13 @@ dataset:
   image_sample:
     blend_a: False
     use_random: True
-    batch_num: 40000
+    batch_num: 200000
 model:
   name: neus
   rendering_from_alpha: True
   fp16: True
+  learned_background: true
+  background_color: random
   aabb:
     scale_zoom_up: ${dataset.aabb.scale_zoom_up} #放大一个块的尺度以实现重叠
     fb_ratio: ${dataset.aabb.fb_ratio} # 前景半径/背景半径
@@ -78,11 +80,12 @@ model:
     grid_resolution: 180 # 128
     density_thresh: 0.01
   point_sample:
-    use_raymarch: False
+    use_raymarch: True
     use_random: True
-    num_samples_per_ray: 512 # 512
+    num_samples_per_ray: 1024 # 512
+    num_samples_per_ray_bg: 256
     use_contract: False
-    use_nerfacc: False
+    use_nerfacc: True
     ray_march:
       dt_gamma: 0.
       T_thresh: 2e-4
@@ -96,13 +99,17 @@ model:
     train_num_rays: ${dataset.ray_sample.train_num_rays}
     max_train_num_rays: ${dataset.ray_sample.max_train_num_rays}
   geometry_network:
+    name: SDF
     feature_dim: 13
     sdf_activation: none
-    sphere_init_radius: 0.
+    sphere_init_radius: 0.5
     grad_type: analytic
     include_xyzs: True
     use_progressive_mask: True
-    progresive_mask_type: fwd_mask
+    progressive_mask:
+      progresive_mask_type: fwd_mask
+      start_level: 4
+      update_steps: 1000
     isosurface:
       method: mc
       resolution: 512
@@ -114,14 +121,12 @@ model:
       n_levels: 16
       n_features_per_level: 2
       log2_hashmap_size: 20 # 大小只影响是否hash冲突
-      base_resolution: 16
-      
-      # per_level_scale: 1.381912879967776 #N_max = 2048
-      # per_level_scale: 1.447269237440378 #N_max = 4096
-      per_level_scale: 1.515716566510398 #N_max = 8192
-      # per_level_scale: 1.5874010519681996 #N_max = 16384
-      # per_level_scale: 1.6624757922855755 #N_max = 32768
-      # per_level_scale: 1.7411011265922482 #N_max = 65536
+      base_resolution: 32
+      # per_level_scale: 1.2599210498948732 #N_max = 1024
+      # per_level_scale: 1.3195079107728942 #N_max = 2048
+      per_level_scale: 1.381912879967776 #N_max = 4096
+      # per_level_scale: 1.447269237440378 #N_max = 8192
+      # per_level_scale: 1.515716566510398 #N_max = 16384
 
       # include_xyz: true
     mlp_network_config:
@@ -130,12 +135,68 @@ model:
       output_activation: none
       n_neurons: 64
       n_hidden_layers: 1
-      sphere_init: true
-      weight_norm: true
+      sphere_init: True
+      weight_norm: True
   color_network:
-    name: volume-radiance
+    name: color_network
     input_feature_dim: ${model.geometry_network.feature_dim}
     use_normal: True
+    dir_encoding_config:
+      otype: SphericalHarmonics
+      degree: 4    
+      # otype: Frequency
+      # degree: 8
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      # output_activation: Sigmoid
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 2
+  geometry_network_bg:
+    name: MLP
+    feature_dim: 13
+    sdf_activation: none
+    sphere_init_radius: 0.5
+    grad_type: analytic
+    include_xyzs: True
+    density_bias: -1
+    use_progressive_mask: False
+    # progressive_mask:
+    #   progresive_mask_type: fwd_mask
+    #   start_level: 4
+    #   update_steps: 1100
+    isosurface:
+      method: mc
+      resolution: 512
+      chunk: 2097152
+      threshold: 0.
+    xyz_encoding_config:
+      otype: Grid
+      type: Hash
+      n_levels: 16
+      n_features_per_level: 2
+      log2_hashmap_size: 19 # 大小只影响是否hash冲突
+      base_resolution: 32
+      # per_level_scale: 1.2599210498948732 #N_max = 1024
+      # per_level_scale: 1.3195079107728942 #N_max = 2048
+      per_level_scale: 1.381912879967776 #N_max = 4096
+      # per_level_scale: 1.447269237440378 #N_max = 8192
+      # per_level_scale: 1.515716566510398 #N_max = 16384
+
+      # include_xyz: true
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 1
+      sphere_init: False
+      weight_norm: False
+  color_network_bg:
+    name: color_network
+    input_feature_dim: ${model.geometry_network.feature_dim}
+    use_normal: False
     dir_encoding_config:
       otype: SphericalHarmonics
       degree: 4    
@@ -159,29 +220,50 @@ system:
     lambda_eikonal: 0.1
   optimizer:
     # name: Adam
-    name: FusedAdam
+    # name: FusedAdam
+    name: AdamW
     args:
       betas: [0.9, 0.99]
       eps: 1.e-15
     params:
       geometry_network:
-          lr: 6.e-3
+          lr: 3.e-3
+          # lr: 0.01
       color_network:
-          lr: 6.e-3
+          lr: 3.e-3
+          # lr: 0.01
       variance:
+          # lr: 2.e-3
           lr: 2.e-3
+      geometry_network_bg:
+        lr: 1.e-3
+      color_network_bg:
+        lr: 1.e-3
+  warmup_steps: 500
   scheduler:
-    name: ExponentialLR
+    name: SequentialLR
+    # name: ExponentialLR
     interval: step
+    # milestones:
+      # - ${system.warmup_steps}
     args:
       step_size: 100
       # gamma: 0.99
       # gamma: 1.01
-      gamma: 0.995
+      gamma: 0.998
+    # schedulers:
+    #   - name: LinearLR # linear warm-up in the first system.warmup_steps steps
+    #     args:
+    #       start_factor: 0.01
+    #       end_factor: 1.0
+    #       total_iters: ${system.warmup_steps}
+    #   - name: ExponentialLR
+    #     args:
+    #       gamma: 0.98
 
 
 trainer:
-  max_steps: 20000
+  max_steps: 200000
   log_every_n_steps: 100
   num_sanity_val_steps: 0
   # val_check_interval: 500
